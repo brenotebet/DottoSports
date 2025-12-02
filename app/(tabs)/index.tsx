@@ -1,98 +1,181 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Link } from 'expo-router';
+import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-export default function HomeScreen() {
+const upcomingClass = {
+  title: 'Cross Training Power',
+  time: 'Hoje · 18:00',
+  coach: 'Coach Marina',
+  location: 'Área principal',
+};
+
+const payment = {
+  dueDate: '15 Dez',
+  amount: 'R$ 95,00',
+};
+
+const highlights = [
+  { label: 'Sequência de treinos', value: '7 dias' },
+  { label: 'Aulas nesta semana', value: '4 agendadas' },
+  { label: 'Foco do mês', value: 'Técnica de Snatch' },
+];
+
+export default function DashboardScreen() {
+  const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}>
+        <ThemedText type="title" style={styles.heading}>
+          Bem-vindo(a) de volta!
         </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        <ThemedView style={styles.cardPrimary}>
+          <ThemedText type="subtitle" style={styles.cardPrimaryText}>Próxima aula</ThemedText>
+          <ThemedText type="title" style={[styles.titleSpacing, styles.cardPrimaryText]}>
+            {upcomingClass.title}
+          </ThemedText>
+          <ThemedText style={styles.cardPrimaryText}>{upcomingClass.time}</ThemedText>
+          <ThemedText style={styles.cardPrimaryText}>{upcomingClass.location}</ThemedText>
+          <ThemedText type="defaultSemiBold" style={[styles.muted, styles.cardPrimaryText]}>
+            com {upcomingClass.coach}
+          </ThemedText>
+          <Pressable style={styles.checkInButton}>
+            <ThemedText type="defaultSemiBold" style={styles.checkInText}>
+              Confirmar presença
+            </ThemedText>
+          </Pressable>
+        </ThemedView>
+
+        <ThemedView style={styles.row}>
+          <ThemedView style={[styles.card, styles.flexItem]}>
+            <ThemedText type="subtitle">Próximo pagamento</ThemedText>
+            <ThemedText type="title" style={styles.titleSpacing}>
+              {payment.amount}
+            </ThemedText>
+            <ThemedText>Vencimento {payment.dueDate}</ThemedText>
+          </ThemedView>
+          <ThemedView style={[styles.card, styles.flexItem]}>
+            <ThemedText type="subtitle">Cronômetro</ThemedText>
+            <ThemedText style={styles.muted}>Intervalos e timer clássico</ThemedText>
+            <Link href="/stopwatch" asChild>
+              <Pressable style={styles.iconLink}>
+                <IconSymbol
+                  name="stopwatch.fill"
+                  color={Colors[colorScheme ?? 'light'].tint}
+                  size={28}
+                />
+                <ThemedText type="defaultSemiBold">Abrir</ThemedText>
+              </Pressable>
+            </Link>
+          </ThemedView>
+        </ThemedView>
+
+        <ThemedView style={styles.card}> 
+          <ThemedText type="subtitle">Resumo rápido</ThemedText>
+          <View style={styles.highlightGrid}>
+            {highlights.map((item) => (
+              <ThemedView key={item.label} style={styles.highlightItem}>
+                <ThemedText type="defaultSemiBold">{item.value}</ThemedText>
+                <ThemedText style={styles.muted}>{item.label}</ThemedText>
+              </ThemedView>
+            ))}
+          </View>
+        </ThemedView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  container: {
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+    gap: 16,
+  },
+  heading: {
+    marginBottom: 4,
+  },
+  card: {
+    borderRadius: 14,
+    padding: 16,
+    gap: 8,
+    backgroundColor: '#e9f4ff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  cardPrimary: {
+    borderRadius: 16,
+    padding: 18,
+    gap: 8,
+    backgroundColor: '#0e9aed',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cardPrimaryText: {
+    color: '#e9f6ff',
+  },
+  titleSpacing: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  muted: {
+    opacity: 0.82,
+  },
+  checkInButton: {
+    marginTop: 10,
+    backgroundColor: '#022a4c',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  checkInText: {
+    color: '#fff',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  flexItem: {
+    flex: 1,
+    minWidth: '48%',
+  },
+  iconLink: {
+    marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  highlightGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  highlightItem: {
+    width: '48%',
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#f0f8ff',
+    gap: 6,
   },
 });
