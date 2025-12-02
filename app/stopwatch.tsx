@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { TopBar } from '@/components/top-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TopBar } from '@/components/top-bar';
 import { Colors } from '@/constants/theme';
 
 function formatTime(totalSeconds: number) {
@@ -304,7 +304,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   container: {
-    paddingTop: 16,
     paddingHorizontal: 20,
     paddingBottom: 32,
     gap: 16,
