@@ -205,6 +205,7 @@ export default function StopwatchScreen() {
               value={rounds}
               min={1}
               max={20}
+              step={1}
               onChange={(next) => setRounds(next)}
               disabled={disableIntervalControls}
             />
@@ -252,12 +253,21 @@ interface IntervalControlProps {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
+  step?: number;
   disabled?: boolean;
 }
 
-function IntervalControl({ label, value, onChange, min = 5, max = 120, disabled }: IntervalControlProps) {
-  const handleIncrease = () => onChange(adjust(value, 5));
-  const handleDecrease = () => onChange(adjust(value, -5));
+function IntervalControl({
+  label,
+  value,
+  onChange,
+  min = 5,
+  max = 120,
+  step = 5,
+  disabled,
+}: IntervalControlProps) {
+  const handleIncrease = () => onChange(adjust(value, step));
+  const handleDecrease = () => onChange(adjust(value, -step));
 
   const adjust = (current: number, delta: number) => {
     const next = current + delta;
@@ -294,6 +304,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   container: {
+    paddingTop: 16,
     paddingHorizontal: 20,
     paddingBottom: 32,
     gap: 16,
