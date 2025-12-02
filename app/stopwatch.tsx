@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Audio } from 'expo-av';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -43,6 +44,37 @@ export default function StopwatchScreen() {
   const [currentRound, setCurrentRound] = useState(1);
   const [timeLeft, setTimeLeft] = useState(workDuration);
   const intervalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dingSoundRef = useRef<Audio.Sound | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDing = async () => {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          require('../assets/sounds/boxing-ding.wav'),
+        );
+
+        if (!isMounted) {
+          await sound.unloadAsync();
+          return;
+        }
+
+        dingSoundRef.current = sound;
+      } catch (error) {
+        console.warn('Failed to load boxing ding sound', error);
+      }
+    };
+
+    loadDing();
+
+    return () => {
+      isMounted = false;
+      if (dingSoundRef.current) {
+        dingSoundRef.current.unloadAsync();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -81,6 +113,8 @@ export default function StopwatchScreen() {
     if (!intervalRunning) return;
     if (timeLeft > 0) return;
 
+    playDing();
+
     if (phase === 'work') {
       setPhase('rest');
       setTimeLeft(restDuration);
@@ -96,7 +130,7 @@ export default function StopwatchScreen() {
         setTimeLeft(workDuration);
       }
     }
-  }, [timeLeft, phase, restDuration, workDuration, rounds, intervalRunning, currentRound]);
+  }, [timeLeft, phase, restDuration, workDuration, rounds, intervalRunning, currentRound, playDing]);
 
   const phaseLabel = phase === 'work' ? 'Trabalho' : 'Descanso';
   const nextPhaseColor = phase === 'work' ? '#0e9aed' : '#74c1ff';
@@ -119,11 +153,22 @@ export default function StopwatchScreen() {
     if (timerRef.current) clearInterval(timerRef.current);
   };
 
+  const playDing = useCallback(async () => {
+    if (!dingSoundRef.current) return;
+
+    try {
+      await dingSoundRef.current.replayAsync();
+    } catch (error) {
+      console.warn('Failed to play boxing ding', error);
+    }
+  }, []);
+
   const handleIntervalStart = () => {
     setIntervalRunning(true);
     setPhase('work');
     setCurrentRound(1);
     setTimeLeft(workDuration);
+    playDing();
   };
 
   const handleIntervalPause = () => {
