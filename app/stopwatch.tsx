@@ -33,7 +33,7 @@ function formatSeconds(totalSeconds: number) {
 export default function StopwatchScreen() {
   const [elapsed, setElapsed] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const timerRef = useRef<NodeJS.Timer | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [workDuration, setWorkDuration] = useState(30);
   const [restDuration, setRestDuration] = useState(15);
@@ -42,7 +42,7 @@ export default function StopwatchScreen() {
   const [phase, setPhase] = useState<'work' | 'rest'>('work');
   const [currentRound, setCurrentRound] = useState(1);
   const [timeLeft, setTimeLeft] = useState(workDuration);
-  const intervalTimerRef = useRef<NodeJS.Timer | null>(null);
+  const intervalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!isRunning) return;
