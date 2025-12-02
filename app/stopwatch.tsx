@@ -1,7 +1,7 @@
+import { Audio } from 'expo-av';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -52,7 +52,7 @@ export default function StopwatchScreen() {
     const loadDing = async () => {
       try {
         const { sound } = await Audio.Sound.createAsync(
-          require('../assets/sounds/boxing-ding.wav'),
+          require('../assets/sounds/boxing-ding.mp3'),
         );
 
         if (!isMounted) {
