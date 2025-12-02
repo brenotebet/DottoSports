@@ -30,8 +30,11 @@ const schedule = {
 };
 
 export default function CalendarScreen() {
-  const days = useMemo(() => Object.keys(schedule), []);
-  const [selectedDay, setSelectedDay] = useState(days[0]);
+  const days = useMemo(
+    () => Object.keys(schedule) as Array<keyof typeof schedule>,
+    [],
+  );
+  const [selectedDay, setSelectedDay] = useState<keyof typeof schedule>(days[0]);
   const dayClasses = schedule[selectedDay];
   const insets = useSafeAreaInsets();
 
