@@ -1,7 +1,7 @@
-import { Audio } from 'expo-av';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Audio } from 'expo-av';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -52,7 +52,7 @@ export default function StopwatchScreen() {
     const loadDing = async () => {
       try {
         const { sound } = await Audio.Sound.createAsync(
-          require('../assets/sounds/boxing-ding.mp3'),
+          require('../assets/sounds/boxing-ding.wav'),
         );
 
         if (!isMounted) {
@@ -108,6 +108,16 @@ export default function StopwatchScreen() {
     if (intervalRunning) return;
     setTimeLeft(phase === 'work' ? workDuration : restDuration);
   }, [phase, workDuration, restDuration, intervalRunning]);
+
+  const playDing = useCallback(async () => {
+    if (!dingSoundRef.current) return;
+
+    try {
+      await dingSoundRef.current.replayAsync();
+    } catch (error) {
+      console.warn('Failed to play boxing ding', error);
+    }
+  }, []);
 
   useEffect(() => {
     if (!intervalRunning) return;
