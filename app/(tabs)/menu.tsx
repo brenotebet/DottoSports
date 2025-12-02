@@ -1,53 +1,67 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Colors } from '@/constants/theme';
 
 const actions = [
-  { title: 'Manage account', description: 'Update membership, details, and preferences.' },
-  { title: 'Insert goal', description: 'Set a new strength or conditioning target.' },
-  { title: 'Contact us', description: 'Message the gym staff for quick support.' },
-  { title: 'Make payment', description: 'Complete dues or drop-in payments.' },
-  { title: 'Notifications', description: 'Control reminders and class alerts.' },
+  { title: 'Gerenciar conta', description: 'Atualize plano, dados pessoais e preferências.' },
+  { title: 'Definir meta', description: 'Cadastre um novo objetivo de força ou condicionamento.' },
+  { title: 'Fale conosco', description: 'Envie uma mensagem rápida para a equipe do box.' },
+  { title: 'Realizar pagamento', description: 'Quite mensalidades ou pagamentos avulsos.' },
+  { title: 'Notificações', description: 'Controle lembretes e alertas das aulas.' },
 ];
 
 export default function MenuScreen() {
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <ThemedText type="title" style={styles.heading}>
-        Menu & account
-      </ThemedText>
+  const insets = useSafeAreaInsets();
 
-      <ThemedView style={styles.card}>
-        <ThemedText type="subtitle">Quick actions</ThemedText>
-        <View style={styles.list}>
-          {actions.map((item) => (
-            <Pressable key={item.title} style={styles.listItem}>
-              <View style={styles.listText}>
-                <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
-                <ThemedText style={styles.muted}>{item.description}</ThemedText>
-              </View>
-              <ThemedText type="default">›</ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      </ThemedView>
-    </ScrollView>
+  return (
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}>
+        <ThemedText type="title" style={styles.heading}>
+          Menu e conta
+        </ThemedText>
+
+        <ThemedView style={styles.card}>
+          <ThemedText type="subtitle">Ações rápidas</ThemedText>
+          <View style={styles.list}>
+            {actions.map((item) => (
+              <Pressable key={item.title} style={styles.listItem}>
+                <View style={styles.listText}>
+                  <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
+                  <ThemedText style={styles.muted}>{item.description}</ThemedText>
+                </View>
+                <ThemedText type="default">›</ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </ThemedView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
   container: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
     gap: 16,
   },
   heading: {
-    marginTop: 8,
+    marginBottom: 4,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     gap: 12,
+    backgroundColor: '#e9f4ff',
   },
   list: {
     gap: 10,

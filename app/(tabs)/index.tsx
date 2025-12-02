@@ -1,5 +1,6 @@
 import { Link } from 'expo-router';
 import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { ThemedText } from '@/components/themed-text';
@@ -8,118 +9,143 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const upcomingClass = {
-  title: 'CrossFit Engine',
-  time: 'Today · 6:00 PM',
-  coach: 'Coach Riley',
-  location: 'Main Floor',
+  title: 'Cross Training Power',
+  time: 'Hoje · 18:00',
+  coach: 'Coach Marina',
+  location: 'Área principal',
 };
 
 const payment = {
-  dueDate: 'Dec 15',
-  amount: '$95.00',
+  dueDate: '15 Dez',
+  amount: 'R$ 95,00',
 };
 
 const highlights = [
-  { label: 'Workout streak', value: '7 days' },
-  { label: 'Classes this week', value: '4 booked' },
-  { label: 'PR focus', value: 'Snatch technique' },
+  { label: 'Sequência de treinos', value: '7 dias' },
+  { label: 'Aulas nesta semana', value: '4 agendadas' },
+  { label: 'Foco do mês', value: 'Técnica de Snatch' },
 ];
 
 export default function DashboardScreen() {
   const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <ThemedText type="title" style={styles.heading}>
-        Welcome back, athlete!
-      </ThemedText>
-
-      <ThemedView style={styles.card}>
-        <ThemedText type="subtitle">Next class</ThemedText>
-        <ThemedText type="title" style={styles.titleSpacing}>
-          {upcomingClass.title}
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}>
+        <ThemedText type="title" style={styles.heading}>
+          Bem-vindo(a) de volta!
         </ThemedText>
-        <ThemedText>{upcomingClass.time}</ThemedText>
-        <ThemedText>{upcomingClass.location}</ThemedText>
-        <ThemedText type="defaultSemiBold" style={styles.muted}>
-          with {upcomingClass.coach}
-        </ThemedText>
-        <Pressable style={styles.checkInButton}>
-          <ThemedText type="defaultSemiBold" style={styles.checkInText}>
-            Check in
-          </ThemedText>
-        </Pressable>
-      </ThemedView>
 
-      <ThemedView style={styles.row}>
-        <ThemedView style={[styles.card, styles.flexItem]}>
-          <ThemedText type="subtitle">Next payment</ThemedText>
-          <ThemedText type="title" style={styles.titleSpacing}>
-            {payment.amount}
+        <ThemedView style={styles.cardPrimary}>
+          <ThemedText type="subtitle" style={styles.cardPrimaryText}>Próxima aula</ThemedText>
+          <ThemedText type="title" style={[styles.titleSpacing, styles.cardPrimaryText]}>
+            {upcomingClass.title}
           </ThemedText>
-          <ThemedText>Due {payment.dueDate}</ThemedText>
+          <ThemedText style={styles.cardPrimaryText}>{upcomingClass.time}</ThemedText>
+          <ThemedText style={styles.cardPrimaryText}>{upcomingClass.location}</ThemedText>
+          <ThemedText type="defaultSemiBold" style={[styles.muted, styles.cardPrimaryText]}>
+            com {upcomingClass.coach}
+          </ThemedText>
+          <Pressable style={styles.checkInButton}>
+            <ThemedText type="defaultSemiBold" style={styles.checkInText}>
+              Confirmar presença
+            </ThemedText>
+          </Pressable>
         </ThemedView>
-        <ThemedView style={[styles.card, styles.flexItem]}>
-          <ThemedText type="subtitle">Stopwatch</ThemedText>
-          <ThemedText style={styles.muted}>Intervals & classic timer</ThemedText>
-          <Link href="/stopwatch" asChild>
-            <Pressable style={styles.iconLink}>
-              <IconSymbol
-                name="stopwatch.fill"
-                color={Colors[colorScheme ?? 'light'].tint}
-                size={28}
-              />
-              <ThemedText type="defaultSemiBold">Open</ThemedText>
-            </Pressable>
-          </Link>
-        </ThemedView>
-      </ThemedView>
 
-      <ThemedView style={styles.card}>
-        <ThemedText type="subtitle">Progress quick look</ThemedText>
-        <View style={styles.highlightGrid}>
-          {highlights.map((item) => (
-            <ThemedView key={item.label} style={styles.highlightItem}>
-              <ThemedText type="defaultSemiBold">{item.value}</ThemedText>
-              <ThemedText style={styles.muted}>{item.label}</ThemedText>
-            </ThemedView>
-          ))}
-        </View>
-      </ThemedView>
-    </ScrollView>
+        <ThemedView style={styles.row}>
+          <ThemedView style={[styles.card, styles.flexItem]}>
+            <ThemedText type="subtitle">Próximo pagamento</ThemedText>
+            <ThemedText type="title" style={styles.titleSpacing}>
+              {payment.amount}
+            </ThemedText>
+            <ThemedText>Vencimento {payment.dueDate}</ThemedText>
+          </ThemedView>
+          <ThemedView style={[styles.card, styles.flexItem]}>
+            <ThemedText type="subtitle">Cronômetro</ThemedText>
+            <ThemedText style={styles.muted}>Intervalos e timer clássico</ThemedText>
+            <Link href="/stopwatch" asChild>
+              <Pressable style={styles.iconLink}>
+                <IconSymbol
+                  name="stopwatch.fill"
+                  color={Colors[colorScheme ?? 'light'].tint}
+                  size={28}
+                />
+                <ThemedText type="defaultSemiBold">Abrir</ThemedText>
+              </Pressable>
+            </Link>
+          </ThemedView>
+        </ThemedView>
+
+        <ThemedView style={styles.card}> 
+          <ThemedText type="subtitle">Resumo rápido</ThemedText>
+          <View style={styles.highlightGrid}>
+            {highlights.map((item) => (
+              <ThemedView key={item.label} style={styles.highlightItem}>
+                <ThemedText type="defaultSemiBold">{item.value}</ThemedText>
+                <ThemedText style={styles.muted}>{item.label}</ThemedText>
+              </ThemedView>
+            ))}
+          </View>
+        </ThemedView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
   container: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
     gap: 16,
   },
   heading: {
-    marginTop: 8,
+    marginBottom: 4,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     gap: 8,
+    backgroundColor: '#e9f4ff',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  cardPrimary: {
+    borderRadius: 16,
+    padding: 18,
+    gap: 8,
+    backgroundColor: '#0e9aed',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  cardPrimaryText: {
+    color: '#e9f6ff',
   },
   titleSpacing: {
     marginTop: 4,
     marginBottom: 4,
   },
   muted: {
-    opacity: 0.7,
+    opacity: 0.82,
   },
   checkInButton: {
-    marginTop: 8,
-    backgroundColor: '#0f766e',
-    paddingVertical: 10,
-    borderRadius: 10,
+    marginTop: 10,
+    backgroundColor: '#022a4c',
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
   },
   checkInText: {
@@ -128,9 +154,11 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 12,
+    flexWrap: 'wrap',
   },
   flexItem: {
     flex: 1,
+    minWidth: '48%',
   },
   iconLink: {
     marginTop: 8,
@@ -144,10 +172,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   highlightItem: {
-    width: '47%',
+    width: '48%',
     padding: 12,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.03)',
-    gap: 4,
+    borderRadius: 12,
+    backgroundColor: '#f0f8ff',
+    gap: 6,
   },
 });

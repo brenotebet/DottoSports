@@ -1,29 +1,31 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Colors } from '@/constants/theme';
 
 const schedule = {
-  'Mon 11': [
-    { time: '6:00 AM', title: 'Strength Foundations', coach: 'Coach Liza' },
-    { time: '7:30 PM', title: 'Engine Builder', coach: 'Coach Ken' },
+  'Seg 11': [
+    { time: '06:00', title: 'Força Base', coach: 'Coach Liza' },
+    { time: '19:30', title: 'Engine Builder', coach: 'Coach Ken' },
   ],
-  'Tue 12': [
-    { time: '6:30 AM', title: 'Gymnastics Skills', coach: 'Coach Emi' },
-    { time: '6:00 PM', title: 'Metcon Madness', coach: 'Coach Quinn' },
+  'Ter 12': [
+    { time: '06:30', title: 'Habilidades de Ginástica', coach: 'Coach Emi' },
+    { time: '18:00', title: 'Metcon Intensivo', coach: 'Coach Quinn' },
   ],
-  'Wed 13': [
-    { time: '12:00 PM', title: 'Lift Heavy', coach: 'Coach Sam' },
-    { time: '6:30 PM', title: 'Partner WOD', coach: 'Coach Rosa' },
+  'Qua 13': [
+    { time: '12:00', title: 'Levantamento Pesado', coach: 'Coach Sam' },
+    { time: '18:30', title: 'Treino em Dupla', coach: 'Coach Rosa' },
   ],
-  'Thu 14': [
-    { time: '5:45 AM', title: 'Conditioning', coach: 'Coach Leo' },
-    { time: '6:15 PM', title: 'Olympic Lifting', coach: 'Coach Sky' },
+  'Qui 14': [
+    { time: '05:45', title: 'Condicionamento', coach: 'Coach Leo' },
+    { time: '18:15', title: 'Levantamento Olímpico', coach: 'Coach Sky' },
   ],
-  'Fri 15': [
-    { time: '6:00 AM', title: 'Sprint Intervals', coach: 'Coach Nate' },
-    { time: '5:30 PM', title: 'Open Gym', coach: 'Supervisor on duty' },
+  'Sex 15': [
+    { time: '06:00', title: 'Sprints e Intervalos', coach: 'Coach Nate' },
+    { time: '17:30', title: 'Open Box', coach: 'Supervisor de plantão' },
   ],
 };
 
@@ -31,54 +33,64 @@ export default function CalendarScreen() {
   const days = useMemo(() => Object.keys(schedule), []);
   const [selectedDay, setSelectedDay] = useState(days[0]);
   const dayClasses = schedule[selectedDay];
+  const insets = useSafeAreaInsets();
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <ThemedText type="title" style={styles.heading}>
-        Class calendar
-      </ThemedText>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}>
+        <ThemedText type="title" style={styles.heading}>
+          Calendário de aulas
+        </ThemedText>
 
-      <View style={styles.dayRow}>
-        {days.map((day) => {
-          const isActive = selectedDay === day;
-          return (
-            <Pressable
-              key={day}
-              onPress={() => setSelectedDay(day)}
-              style={[styles.dayChip, isActive && styles.dayChipActive]}>
-              <ThemedText type="defaultSemiBold" style={isActive && styles.dayChipTextActive}>
-                {day}
-              </ThemedText>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <ThemedView style={styles.card}>
-        <ThemedText type="subtitle">{selectedDay} schedule</ThemedText>
-        <View style={styles.scheduleList}>
-          {dayClasses.map((item) => (
-            <ThemedView key={`${item.time}-${item.title}`} style={styles.session}>
-              <View>
-                <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
-                <ThemedText style={styles.muted}>{item.coach}</ThemedText>
-              </View>
-              <ThemedText type="defaultSemiBold">{item.time}</ThemedText>
-            </ThemedView>
-          ))}
+        <View style={styles.dayRow}>
+          {days.map((day) => {
+            const isActive = selectedDay === day;
+            return (
+              <Pressable
+                key={day}
+                onPress={() => setSelectedDay(day)}
+                style={[styles.dayChip, isActive && styles.dayChipActive]}>
+                <ThemedText type="defaultSemiBold" style={isActive && styles.dayChipTextActive}>
+                  {day}
+                </ThemedText>
+              </Pressable>
+            );
+          })}
         </View>
-      </ThemedView>
-    </ScrollView>
+
+        <ThemedView style={styles.card}>
+          <ThemedText type="subtitle">Agenda de {selectedDay}</ThemedText>
+          <View style={styles.scheduleList}>
+            {dayClasses.map((item) => (
+              <ThemedView key={`${item.time}-${item.title}`} style={styles.session}>
+                <View>
+                  <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
+                  <ThemedText style={styles.muted}>{item.coach}</ThemedText>
+                </View>
+                <ThemedText type="defaultSemiBold">{item.time}</ThemedText>
+              </ThemedView>
+            ))}
+          </View>
+        </ThemedView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
   container: {
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
     gap: 16,
   },
   heading: {
-    marginTop: 8,
+    marginBottom: 4,
   },
   dayRow: {
     flexDirection: 'row',
@@ -89,26 +101,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: '#e5f3ff',
   },
   dayChipActive: {
-    backgroundColor: '#0f766e',
+    backgroundColor: '#0e9aed',
   },
   dayChipTextActive: {
     color: '#fff',
   },
   card: {
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     gap: 12,
+    backgroundColor: '#e9f4ff',
   },
   scheduleList: {
     gap: 12,
   },
   session: {
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
-    backgroundColor: 'rgba(0,0,0,0.03)',
+    backgroundColor: '#f4faff',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
