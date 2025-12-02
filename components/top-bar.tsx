@@ -15,7 +15,7 @@ export function TopBar({ title }: TopBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 6 }]}> 
+    <View style={[styles.container, { paddingTop: insets.top + 4 }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Voltar"

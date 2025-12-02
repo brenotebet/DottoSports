@@ -140,7 +140,7 @@ export default function StopwatchScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
       <TopBar title="Cronômetro" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
@@ -208,6 +208,7 @@ export default function StopwatchScreen() {
               step={1}
               onChange={(next) => setRounds(next)}
               disabled={disableIntervalControls}
+              unit=""
             />
           </View>
 
@@ -255,6 +256,7 @@ interface IntervalControlProps {
   max?: number;
   step?: number;
   disabled?: boolean;
+  unit?: string;
 }
 
 function IntervalControl({
@@ -265,6 +267,7 @@ function IntervalControl({
   max = 120,
   step = 5,
   disabled,
+  unit = 's',
 }: IntervalControlProps) {
   const handleIncrease = () => onChange(adjust(value, step));
   const handleDecrease = () => onChange(adjust(value, -step));
@@ -279,7 +282,7 @@ function IntervalControl({
   return (
     <ThemedView style={[styles.controlCard, disabled && styles.controlDisabled]}>
       <ThemedText type="defaultSemiBold">{label}</ThemedText>
-      <ThemedText style={styles.controlValue}>{value}s</ThemedText>
+      <ThemedText style={styles.controlValue}>{unit ? `${value}${unit}` : value}</ThemedText>
       <View style={styles.controlButtons}>
         <Pressable
           disabled={disabled}
@@ -331,6 +334,7 @@ const styles = StyleSheet.create({
   },
   timerText: {
     fontSize: 44,
+    lineHeight: 52,
     letterSpacing: 0.5,
   },
   buttonRow: {
