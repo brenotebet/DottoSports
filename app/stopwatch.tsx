@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
+import { Sound } from 'expo-audio';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -44,14 +44,14 @@ export default function StopwatchScreen() {
   const [currentRound, setCurrentRound] = useState(1);
   const [timeLeft, setTimeLeft] = useState(workDuration);
   const intervalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const dingSoundRef = useRef<Audio.Sound | null>(null);
+  const dingSoundRef = useRef<Sound | null>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadDing = async () => {
       try {
-        const { sound } = await Audio.Sound.createAsync(
+        const { sound } = await Sound.createAsync(
           require('../assets/sounds/boxing-ding.wav'),
         );
 
@@ -162,16 +162,6 @@ export default function StopwatchScreen() {
     setElapsed(0);
     if (timerRef.current) clearInterval(timerRef.current);
   };
-
-  const playDing = useCallback(async () => {
-    if (!dingSoundRef.current) return;
-
-    try {
-      await dingSoundRef.current.replayAsync();
-    } catch (error) {
-      console.warn('Failed to play boxing ding', error);
-    }
-  }, []);
 
   const handleIntervalStart = () => {
     setIntervalRunning(true);
