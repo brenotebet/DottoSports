@@ -153,7 +153,7 @@ export default function LoginScreen() {
 
         <View style={styles.footer}>
           <ThemedText>Não tem conta?</ThemedText>
-          <Link href="/signup" asChild>
+          <Link href="../signup" asChild>
             <Pressable>
               <ThemedText type="link">Criar conta</ThemedText>
             </Pressable>

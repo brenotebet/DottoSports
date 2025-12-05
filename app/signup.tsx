@@ -201,7 +201,7 @@ export default function SignupScreen() {
 
         <View style={styles.footer}>
           <ThemedText>Já tem conta?</ThemedText>
-          <Link href="/login" asChild>
+          <Link href="../login" asChild>
             <Pressable>
               <ThemedText type="link">Entrar</ThemedText>
             </Pressable>
