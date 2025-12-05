@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
+import { Audio } from 'expo-audio';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -162,16 +162,6 @@ export default function StopwatchScreen() {
     setElapsed(0);
     if (timerRef.current) clearInterval(timerRef.current);
   };
-
-  const playDing = useCallback(async () => {
-    if (!dingSoundRef.current) return;
-
-    try {
-      await dingSoundRef.current.replayAsync();
-    } catch (error) {
-      console.warn('Failed to play boxing ding', error);
-    }
-  }, []);
 
   const handleIntervalStart = () => {
     setIntervalRunning(true);
