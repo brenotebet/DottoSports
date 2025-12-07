@@ -1,5 +1,5 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect, type PropsWithChildren } from 'react';
@@ -15,10 +15,9 @@ function AuthGate({ children }: PropsWithChildren) {
   const { user, initializing } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const navigationState = useRootNavigationState();
 
   useEffect(() => {
-    if (!navigationState?.key || initializing) return;
+    if (initializing) return;
 
     const inAuthGroup = segments[0] === '(auth)';
 
@@ -27,9 +26,9 @@ function AuthGate({ children }: PropsWithChildren) {
     } else if (user && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [user, initializing, segments, navigationState?.key, router]);
+  }, [user, initializing, segments, router]);
 
-  if (initializing || !navigationState?.key) {
+  if (initializing) {
     return null;
   }
 
