@@ -1,7 +1,7 @@
+import { useAudioPlayer } from 'expo-audio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Audio } from 'expo-av';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -44,37 +44,8 @@ export default function StopwatchScreen() {
   const [currentRound, setCurrentRound] = useState(1);
   const [timeLeft, setTimeLeft] = useState(workDuration);
   const intervalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const dingSoundRef = useRef<Audio.Sound | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadDing = async () => {
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          require('../assets/sounds/boxing-ding.wav'),
-        );
-
-        if (!isMounted) {
-          await sound.unloadAsync();
-          return;
-        }
-
-        dingSoundRef.current = sound;
-      } catch (error) {
-        console.warn('Failed to load boxing ding sound', error);
-      }
-    };
-
-    loadDing();
-
-    return () => {
-      isMounted = false;
-      if (dingSoundRef.current) {
-        dingSoundRef.current.unloadAsync();
-      }
-    };
-  }, []);
+  const dingPlayer = useAudioPlayer(require('../assets/boxing-ding.mp3'));
 
   useEffect(() => {
     if (!isRunning) return;
@@ -110,14 +81,17 @@ export default function StopwatchScreen() {
   }, [phase, workDuration, restDuration, intervalRunning]);
 
   const playDing = useCallback(async () => {
-    if (!dingSoundRef.current) return;
-
     try {
-      await dingSoundRef.current.replayAsync();
+      // ensure audio is loaded before trying to play
+      if (!dingPlayer.isLoaded) return;
+
+      // expo-audio doesn't auto-rewind when it finishes
+      await dingPlayer.seekTo(0);
+      dingPlayer.play();
     } catch (error) {
       console.warn('Failed to play boxing ding', error);
     }
-  }, []);
+  }, [dingPlayer]);
 
   useEffect(() => {
     if (!intervalRunning) return;
@@ -140,7 +114,16 @@ export default function StopwatchScreen() {
         setTimeLeft(workDuration);
       }
     }
-  }, [timeLeft, phase, restDuration, workDuration, rounds, intervalRunning, currentRound, playDing]);
+  }, [
+    timeLeft,
+    phase,
+    restDuration,
+    workDuration,
+    rounds,
+    intervalRunning,
+    currentRound,
+    playDing,
+  ]);
 
   const phaseLabel = phase === 'work' ? 'Trabalho' : 'Descanso';
   const nextPhaseColor = phase === 'work' ? '#0e9aed' : '#74c1ff';
@@ -162,16 +145,6 @@ export default function StopwatchScreen() {
     setElapsed(0);
     if (timerRef.current) clearInterval(timerRef.current);
   };
-
-  const playDing = useCallback(async () => {
-    if (!dingSoundRef.current) return;
-
-    try {
-      await dingSoundRef.current.replayAsync();
-    } catch (error) {
-      console.warn('Failed to play boxing ding', error);
-    }
-  }, []);
 
   const handleIntervalStart = () => {
     setIntervalRunning(true);
@@ -268,7 +241,9 @@ export default function StopwatchScreen() {
           </View>
 
           <ThemedView style={styles.intervalDisplay}>
-            <ThemedText type="defaultSemiBold">Rodada {currentRound} de {rounds}</ThemedText>
+            <ThemedText type="defaultSemiBold">
+              Rodada {currentRound} de {rounds}
+            </ThemedText>
             <ThemedText style={[styles.muted, { color: nextPhaseColor }]}>{phaseLabel}</ThemedText>
             <ThemedText type="title" style={styles.timerText}>
               {formatSeconds(timeLeft)}
@@ -284,7 +259,10 @@ export default function StopwatchScreen() {
                   </ThemedText>
                 </Pressable>
               ) : (
-                <Pressable style={[styles.button, styles.buttonGhost]} onPress={handleIntervalPause}>
+                <Pressable
+                  style={[styles.button, styles.buttonGhost]}
+                  onPress={handleIntervalPause}
+                >
                   <ThemedText type="defaultSemiBold" style={styles.buttonGhostText}>
                     Pausar
                   </ThemedText>
@@ -324,15 +302,15 @@ function IntervalControl({
   disabled,
   unit = 's',
 }: IntervalControlProps) {
-  const handleIncrease = () => onChange(adjust(value, step));
-  const handleDecrease = () => onChange(adjust(value, -step));
-
   const adjust = (current: number, delta: number) => {
     const next = current + delta;
     if (next < min) return min;
     if (next > max) return max;
     return next;
   };
+
+  const handleIncrease = () => onChange(adjust(value, step));
+  const handleDecrease = () => onChange(adjust(value, -step));
 
   return (
     <ThemedView style={[styles.controlCard, disabled && styles.controlDisabled]}>
@@ -342,13 +320,15 @@ function IntervalControl({
         <Pressable
           disabled={disabled}
           style={[styles.adjustButton, disabled && styles.adjustButtonDisabled]}
-          onPress={handleDecrease}>
+          onPress={handleDecrease}
+        >
           <ThemedText style={styles.adjustText}>-</ThemedText>
         </Pressable>
         <Pressable
           disabled={disabled}
           style={[styles.adjustButton, disabled && styles.adjustButtonDisabled]}
-          onPress={handleIncrease}>
+          onPress={handleIncrease}
+        >
           <ThemedText style={styles.adjustText}>+</ThemedText>
         </Pressable>
       </View>
