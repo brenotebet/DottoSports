@@ -8,6 +8,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, type PropsWithChildren } from 'react';
 import 'react-native-reanimated';
+import { InteractionManager } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/providers/auth-provider';
@@ -31,13 +32,17 @@ function AuthGate({ children }: PropsWithChildren) {
 
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (!user && !inAuthGroup) {
-      // Not logged in and not already on auth routes -> go to login
-      router.replace('/(auth)/login');
-    } else if (user && inAuthGroup) {
-      // Logged in but still inside auth group -> go to main app
-      router.replace('/(tabs)');
-    }
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (!user && !inAuthGroup) {
+        // Not logged in and not already on auth routes -> go to login
+        router.replace('/(auth)/login');
+      } else if (user && inAuthGroup) {
+        // Logged in but still inside auth group -> go to main app
+        router.replace('/(tabs)');
+      }
+    });
+
+    return () => task.cancel();
   }, [navState?.key, user, initializing, segments, router]);
 
   // IMPORTANT: never hide the Slot; always render children
