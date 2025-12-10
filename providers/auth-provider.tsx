@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 
-import { signInWithEmail, signUpWithEmail } from '@/services/firebase-auth';
+import { getAccountInfo, sendEmailVerification, signInWithEmail, signUpWithEmail } from '@/services/firebase-auth';
 
 export type AuthenticatedUser = {
   email: string;
@@ -25,12 +25,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const credentials = await signInWithEmail(email.trim(), password);
+    const accountInfo = await getAccountInfo(credentials.idToken);
+
+    if (!accountInfo.emailVerified) {
+      await sendEmailVerification(credentials.idToken);
+      throw new Error('Confirme seu e-mail antes de continuar. Enviamos um novo link de verificação.');
+    }
+
     setUser(credentials);
   };
 
   const signup = async (email: string, password: string) => {
     const credentials = await signUpWithEmail(email.trim(), password);
-    setUser(credentials);
+    await sendEmailVerification(credentials.idToken);
   };
 
   const logout = () => setUser(null);

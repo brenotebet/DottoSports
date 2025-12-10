@@ -34,6 +34,13 @@ type FirebaseAuthResponse = {
   localId: string;
 };
 
+type AccountInfoResponse = {
+  users?: {
+    email: string;
+    emailVerified: boolean;
+  }[];
+};
+
 export const signInWithEmail = async (email: string, password: string) => {
   const response = await handleRequest<FirebaseAuthResponse>('accounts:signInWithPassword', {
     email,
@@ -62,4 +69,24 @@ export const signUpWithEmail = async (email: string, password: string) => {
     refreshToken: response.refreshToken,
     uid: response.localId,
   };
+};
+
+export const getAccountInfo = async (idToken: string) => {
+  const response = await handleRequest<AccountInfoResponse>('accounts:lookup', {
+    idToken,
+  });
+
+  const user = response.users?.[0];
+
+  return {
+    emailVerified: user?.emailVerified ?? false,
+    email: user?.email ?? '',
+  };
+};
+
+export const sendEmailVerification = async (idToken: string) => {
+  await handleRequest('accounts:sendOobCode', {
+    requestType: 'VERIFY_EMAIL',
+    idToken,
+  });
 };
