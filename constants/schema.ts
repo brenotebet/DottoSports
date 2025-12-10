@@ -98,6 +98,7 @@ export type Payment = {
   status: 'pending' | 'paid' | 'failed';
   dueDate: string;
   paidAt?: string;
+  description?: string;
   invoiceId?: string;
 };
 
