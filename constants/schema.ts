@@ -48,6 +48,13 @@ export type TrainingClass = {
   level: 'all' | 'beginner' | 'intermediate' | 'advanced';
   category: 'crossfit' | 'weightlifting' | 'mobility' | 'conditioning';
   capacity: number;
+  schedule: Array<{
+    day: string;
+    start: string;
+    end: string;
+    location: string;
+  }>;
+  tags: string[];
   instructorId: string;
   createdAt: string;
   updatedAt: string;
@@ -58,8 +65,10 @@ export type ClassSession = {
   classId: string;
   startTime: string;
   endTime: string;
+  capacity: number;
   location: string;
   coachNotes?: string;
+  tags?: string[];
 };
 
 export type Enrollment = {

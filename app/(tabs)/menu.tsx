@@ -1,9 +1,11 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
+import { useAuth } from '@/providers/auth-provider';
 
 const actions = [
   { title: 'Gerenciar conta', description: 'Atualize plano, dados pessoais e preferências.' },
@@ -15,9 +17,17 @@ const actions = [
 
 export default function MenuScreen() {
   const insets = useSafeAreaInsets();
+  const { hasRole } = useAuth();
+
+  const instructorActions = hasRole(['INSTRUCTOR', 'ADMIN'])
+    ? [
+        { title: 'Painel do instrutor', href: '/instructor/dashboard' as const },
+        { title: 'Aulas e sessões', href: '/instructor/classes' as const },
+      ]
+    : [];
 
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}> 
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}>
@@ -39,6 +49,22 @@ export default function MenuScreen() {
             ))}
           </View>
         </ThemedView>
+
+        {instructorActions.length > 0 && (
+          <ThemedView style={styles.card}>
+            <ThemedText type="subtitle">Área do instrutor</ThemedText>
+            <View style={styles.list}>
+              {instructorActions.map((item) => (
+                <Link key={item.title} href={item.href} asChild>
+                  <Pressable style={styles.listItem}>
+                    <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
+                    <ThemedText type="default">›</ThemedText>
+                  </Pressable>
+                </Link>
+              ))}
+            </View>
+          </ThemedView>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

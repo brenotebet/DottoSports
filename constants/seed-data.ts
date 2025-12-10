@@ -94,6 +94,11 @@ export const classes: TrainingClass[] = [
     level: 'intermediate',
     category: 'crossfit',
     capacity: 16,
+    schedule: [
+      { day: 'Mon', start: '06:00', end: '07:00', location: 'Área principal' },
+      { day: 'Wed', start: '18:00', end: '19:00', location: 'Área principal' },
+    ],
+    tags: ['metcon', 'força', 'team'],
     instructorId: 'instructor-1',
     createdAt: '2024-02-01T12:00:00Z',
     updatedAt: '2024-02-05T12:00:00Z',
@@ -105,6 +110,11 @@ export const classes: TrainingClass[] = [
     level: 'advanced',
     category: 'weightlifting',
     capacity: 10,
+    schedule: [
+      { day: 'Tue', start: '12:00', end: '13:00', location: 'Plataforma de LPO' },
+      { day: 'Thu', start: '19:00', end: '20:15', location: 'Plataforma de LPO' },
+    ],
+    tags: ['técnica', 'LPO'],
     instructorId: 'instructor-1',
     createdAt: '2024-02-02T12:00:00Z',
     updatedAt: '2024-02-06T12:00:00Z',
@@ -117,7 +127,9 @@ export const sessions: ClassSession[] = [
     classId: 'class-1',
     startTime: '2024-12-11T18:00:00Z',
     endTime: '2024-12-11T19:00:00Z',
+    capacity: 16,
     location: 'Área principal',
+    tags: ['check-in liberado'],
     coachNotes: 'Preparar kettlebells e anilhas leves.',
   },
   {
@@ -125,7 +137,9 @@ export const sessions: ClassSession[] = [
     classId: 'class-2',
     startTime: '2024-12-12T12:00:00Z',
     endTime: '2024-12-12T13:00:00Z',
+    capacity: 10,
     location: 'Plataforma de LPO',
+    tags: ['mobilidade', 'técnica'],
   },
 ];
 
