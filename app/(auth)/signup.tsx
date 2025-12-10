@@ -4,7 +4,7 @@ import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, Touchabl
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/providers/auth-provider';
 
@@ -46,6 +46,7 @@ export default function SignupScreen() {
   const themeColors = Colors[colorScheme ?? 'light'];
   const inputBackground = colorScheme === 'dark' ? '#0f1720' : '#ffffff';
   const placeholderColor = colorScheme === 'dark' ? '#9ba3af' : '#8ca0ae';
+  const textColor = themeColors.text;
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -54,7 +55,7 @@ export default function SignupScreen() {
           <ThemedText type="title" style={styles.title}>
             Criar conta
           </ThemedText>
-          <ThemedText style={styles.subtitle}>Use seu e-mail para se registrar.</ThemedText>
+          <ThemedText style={[styles.subtitle, { color: textColor }]}>Use seu e-mail para se registrar.</ThemedText>
 
           <TextInput
             autoCapitalize="none"
@@ -62,7 +63,10 @@ export default function SignupScreen() {
             keyboardType="email-address"
             placeholder="email@exemplo.com"
             placeholderTextColor={placeholderColor}
-            style={[styles.input, { borderColor: themeColors.icon, backgroundColor: inputBackground }]}
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
             value={email}
             onChangeText={setEmail}
           />
@@ -72,7 +76,10 @@ export default function SignupScreen() {
             placeholder="Senha"
             placeholderTextColor={placeholderColor}
             secureTextEntry
-            style={[styles.input, { borderColor: themeColors.icon, backgroundColor: inputBackground }]}
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
             value={password}
             onChangeText={setPassword}
           />
@@ -82,7 +89,10 @@ export default function SignupScreen() {
             placeholder="Confirme a senha"
             placeholderTextColor={placeholderColor}
             secureTextEntry
-            style={[styles.input, { borderColor: themeColors.icon, backgroundColor: inputBackground }]}
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
             value={confirmPassword}
             onChangeText={setConfirmPassword}
           />
@@ -103,12 +113,14 @@ export default function SignupScreen() {
             {submitting ? (
               <ActivityIndicator color="#0b3b5a" />
             ) : (
-              <ThemedText style={styles.buttonText}>Cadastrar</ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.buttonText}>
+                Cadastrar
+              </ThemedText>
             )}
           </Pressable>
 
           <View style={styles.footer}>
-            <ThemedText style={styles.footerText}>Já tem conta?</ThemedText>
+            <ThemedText style={[styles.footerText, { color: textColor }]}>Já tem conta?</ThemedText>
             <Link href="/(auth)/login" style={[styles.footerLink, { color: themeColors.tint }]}>Entrar</Link>
           </View>
         </View>
@@ -127,12 +139,14 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   title: {
-    fontSize: 28,
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   subtitle: {
     textAlign: 'center',
-    color: '#4b5a68',
+    fontSize: 16,
+    lineHeight: 22,
+    opacity: 0.8,
   },
   input: {
     borderWidth: 1,
@@ -140,6 +154,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
+    lineHeight: 22,
+    fontFamily: Fonts.sans,
     backgroundColor: '#ffffff',
   },
   button: {
@@ -148,7 +164,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: {
-    fontWeight: '700',
     color: '#0b3b5a',
   },
   errorText: {
@@ -165,7 +180,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   footerText: {
-    color: '#4b5a68',
+    fontSize: 15,
+    lineHeight: 20,
   },
   footerLink: {
     fontWeight: '700',
