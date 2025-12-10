@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
+import { useRoleGuard } from '@/hooks/use-role-guard';
 
 const schedule = {
   'Seg 11': [
@@ -30,10 +31,9 @@ const schedule = {
 };
 
 export default function CalendarScreen() {
-  const days = useMemo(
-    () => Object.keys(schedule) as Array<keyof typeof schedule>,
-    [],
-  );
+  useRoleGuard(['ADMIN', 'INSTRUCTOR']);
+
+  const days = useMemo(() => Object.keys(schedule) as (keyof typeof schedule)[], []);
   const [selectedDay, setSelectedDay] = useState<keyof typeof schedule>(days[0]);
   const dayClasses = schedule[selectedDay];
   const insets = useSafeAreaInsets();
