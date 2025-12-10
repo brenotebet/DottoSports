@@ -1,15 +1,14 @@
-import { Link, useRouter } from 'expo-router';
+import { Link } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, TouchableWithoutFeedback, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/providers/auth-provider';
 
 export default function SignupScreen() {
-  const router = useRouter();
   const colorScheme = useColorScheme();
   const { signup } = useAuth();
 
@@ -18,6 +17,7 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const onSubmit = async () => {
     if (password !== confirmPassword) {
@@ -27,10 +27,14 @@ export default function SignupScreen() {
 
     setSubmitting(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
       await signup(email, password);
-      router.replace('/(tabs)');
+      setSuccessMessage(`Enviamos um e-mail de verificação para ${email.trim()}. Confirme para acessar sua conta.`);
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Não foi possível criar sua conta.';
       setError(message);
@@ -42,73 +46,86 @@ export default function SignupScreen() {
   const themeColors = Colors[colorScheme ?? 'light'];
   const inputBackground = colorScheme === 'dark' ? '#0f1720' : '#ffffff';
   const placeholderColor = colorScheme === 'dark' ? '#9ba3af' : '#8ca0ae';
+  const textColor = themeColors.text;
 
   return (
-    <ThemedView style={[styles.container, { backgroundColor: themeColors.background }]}>
-      <View style={styles.formContainer}>
-        <ThemedText type="title" style={styles.title}>
-          Criar conta
-        </ThemedText>
-        <ThemedText style={styles.subtitle}>Use seu e-mail para se registrar.</ThemedText>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <ThemedView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <View style={styles.formContainer}>
+          <ThemedText type="title" style={styles.title}>
+            Criar conta
+          </ThemedText>
+          <ThemedText style={[styles.subtitle, { color: textColor }]}>Use seu e-mail para se registrar.</ThemedText>
 
-        <TextInput
-          autoCapitalize="none"
-          autoComplete="email"
-          keyboardType="email-address"
-          placeholder="email@exemplo.com"
-          placeholderTextColor={placeholderColor}
-          style={[styles.input, { borderColor: themeColors.icon, backgroundColor: inputBackground }]}
-          value={email}
-          onChangeText={setEmail}
-        />
+          <TextInput
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            placeholder="email@exemplo.com"
+            placeholderTextColor={placeholderColor}
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
+            value={email}
+            onChangeText={setEmail}
+          />
 
-        <TextInput
-          autoComplete="password"
-          placeholder="Senha"
-          placeholderTextColor={placeholderColor}
-          secureTextEntry
-          style={[styles.input, { borderColor: themeColors.icon, backgroundColor: inputBackground }]}
-          value={password}
-          onChangeText={setPassword}
-        />
+          <TextInput
+            autoComplete="password"
+            placeholder="Senha"
+            placeholderTextColor={placeholderColor}
+            secureTextEntry
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
+            value={password}
+            onChangeText={setPassword}
+          />
 
-        <TextInput
-          autoComplete="password"
-          placeholder="Confirme a senha"
-          placeholderTextColor={placeholderColor}
-          secureTextEntry
-          style={[styles.input, { borderColor: themeColors.icon, backgroundColor: inputBackground }]}
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-        />
+          <TextInput
+            autoComplete="password"
+            placeholder="Confirme a senha"
+            placeholderTextColor={placeholderColor}
+            secureTextEntry
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+          />
 
-        {error ? (
-          <ThemedText style={styles.errorText}>{error}</ThemedText>
-        ) : null}
+          {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
+          {successMessage ? <ThemedText style={styles.successText}>{successMessage}</ThemedText> : null}
 
-        <Pressable
-          disabled={submitting}
-          onPress={onSubmit}
-          style={({ pressed }) => [
-            styles.button,
-            {
-              backgroundColor: submitting ? '#9fd4f8' : themeColors.tint,
-              opacity: pressed ? 0.9 : 1,
-            },
-          ]}>
-          {submitting ? (
-            <ActivityIndicator color="#0b3b5a" />
-          ) : (
-            <ThemedText style={styles.buttonText}>Cadastrar</ThemedText>
-          )}
-        </Pressable>
+          <Pressable
+            disabled={submitting}
+            onPress={onSubmit}
+            style={({ pressed }) => [
+              styles.button,
+              {
+                backgroundColor: submitting ? '#9fd4f8' : themeColors.tint,
+                opacity: pressed ? 0.9 : 1,
+              },
+            ]}>
+            {submitting ? (
+              <ActivityIndicator color="#0b3b5a" />
+            ) : (
+              <ThemedText type="defaultSemiBold" style={styles.buttonText}>
+                Cadastrar
+              </ThemedText>
+            )}
+          </Pressable>
 
-        <View style={styles.footer}>
-          <ThemedText style={styles.footerText}>Já tem conta?</ThemedText>
-          <Link href="/(auth)/login" style={[styles.footerLink, { color: themeColors.tint }]}>Entrar</Link>
+          <View style={styles.footer}>
+            <ThemedText style={[styles.footerText, { color: textColor }]}>Já tem conta?</ThemedText>
+            <Link href="/(auth)/login" style={[styles.footerLink, { color: themeColors.tint }]}>Entrar</Link>
+          </View>
         </View>
-      </View>
-    </ThemedView>
+      </ThemedView>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -122,12 +139,14 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   title: {
-    fontSize: 28,
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   subtitle: {
     textAlign: 'center',
-    color: '#4b5a68',
+    fontSize: 16,
+    lineHeight: 22,
+    opacity: 0.8,
   },
   input: {
     borderWidth: 1,
@@ -135,6 +154,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
+    lineHeight: 22,
+    fontFamily: Fonts.sans,
     backgroundColor: '#ffffff',
   },
   button: {
@@ -143,11 +164,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: {
-    fontWeight: '700',
     color: '#0b3b5a',
   },
   errorText: {
     color: '#d9534f',
+    textAlign: 'center',
+  },
+  successText: {
+    color: '#0f9d58',
     textAlign: 'center',
   },
   footer: {
@@ -156,7 +180,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   footerText: {
-    color: '#4b5a68',
+    fontSize: 15,
+    lineHeight: 20,
   },
   footerLink: {
     fontWeight: '700',
