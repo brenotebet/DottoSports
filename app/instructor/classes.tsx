@@ -6,6 +6,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
+import { TrainingClass } from '@/constants/schema';
 
 type ClassFormState = {
   title: string;
@@ -91,7 +92,7 @@ export default function InstructorClassesScreen() {
       return;
     }
 
-    const payload = {
+    const payload: Partial<TrainingClass> = {
       title: classForm.title,
       description: classForm.description || 'Aula personalizada para o box.',
       level: classForm.level,
@@ -107,7 +108,7 @@ export default function InstructorClassesScreen() {
       ],
       tags: classForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
       instructorId: 'instructor-1',
-    } as const;
+    };
 
     if (editingClassId) {
       updateClass(editingClassId, payload);
