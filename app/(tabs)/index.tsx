@@ -95,7 +95,7 @@ export default function DashboardScreen() {
             {sessionClass ? `Capacidade ${sessionClass.capacity}` : 'Nenhuma turma ativa'}
           </ThemedText>
           <View style={styles.rowActions}>
-            <Link href="/classes" asChild>
+            <Link href="/(tabs)/classes" asChild>
               <Pressable style={[styles.checkInButton, { backgroundColor: '#094f7d' }]}>
                 <ThemedText type="defaultSemiBold" style={styles.checkInText}>
                   Ver catálogo
