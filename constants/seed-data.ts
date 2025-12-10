@@ -30,7 +30,7 @@ export const seedAccounts: SeedAccount[] = [
   },
   {
     id: 'user-instructor-1',
-    email: 'coach@dottosports.test',
+    email: 'brenotebet@live.com',
     password: 'Coach@123',
     role: 'INSTRUCTOR',
     status: 'active',
