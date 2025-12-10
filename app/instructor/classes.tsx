@@ -92,7 +92,7 @@ export default function InstructorClassesScreen() {
       return;
     }
 
-    const payload: Partial<TrainingClass> = {
+    const payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'> = {
       title: classForm.title,
       description: classForm.description || 'Aula personalizada para o box.',
       level: classForm.level,
@@ -154,7 +154,7 @@ export default function InstructorClassesScreen() {
       return;
     }
 
-    const payload = {
+    const payload: Omit<ClassSession, 'id'> = {
       classId: sessionForm.classId,
       startTime: sessionForm.startTime,
       endTime: sessionForm.endTime,
@@ -162,7 +162,7 @@ export default function InstructorClassesScreen() {
       capacity: Number(sessionForm.capacity),
       tags: sessionForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
       coachNotes: sessionForm.coachNotes,
-    } as const;
+    };
 
     if (editingSessionId) {
       updateSession(editingSessionId, payload);
