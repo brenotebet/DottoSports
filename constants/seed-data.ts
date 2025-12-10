@@ -174,6 +174,7 @@ export const payments: Payment[] = [
     method: 'pix',
     status: 'pending',
     dueDate: '2024-12-15',
+    description: 'Mensalidade dezembro',
   },
 ];
 
