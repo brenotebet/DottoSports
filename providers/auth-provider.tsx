@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import * as FileSystem from 'expo-file-system';
 
 import { getAccountInfo, sendEmailVerification, signInWithEmail, signUpWithEmail } from '@/services/firebase-auth';
 import { resolveSeedDisplayName, resolveSeedRole } from '@/constants/seed-data';
@@ -23,10 +24,11 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const authStateFile = `${FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? ''}auth-user.json`;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
-  const initializing = false;
+  const [initializing, setInitializing] = useState(true);
 
   const buildAuthenticatedUser = (credentials: Omit<AuthenticatedUser, 'role' | 'displayName'>) => {
     const resolvedRole = resolveSeedRole(credentials.email) ?? 'STUDENT';
@@ -38,6 +40,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } satisfies AuthenticatedUser;
   };
 
+  const persistUser = async (nextUser: AuthenticatedUser | null) => {
+    if (!authStateFile) return;
+
+    try {
+      if (nextUser) {
+        await FileSystem.writeAsStringAsync(authStateFile, JSON.stringify(nextUser));
+      } else {
+        const fileInfo = await FileSystem.getInfoAsync(authStateFile);
+        if (fileInfo.exists) {
+          await FileSystem.deleteAsync(authStateFile, { idempotent: true });
+        }
+      }
+    } catch (error) {
+      console.warn('Não foi possível atualizar o cache de autenticação', error);
+    }
+  };
+
   const login = async (email: string, password: string) => {
     const credentials = await signInWithEmail(email.trim(), password);
     const accountInfo = await getAccountInfo(credentials.idToken);
@@ -47,7 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Confirme seu e-mail antes de continuar. Enviamos um novo link de verificação.');
     }
 
-    setUser(buildAuthenticatedUser(credentials));
+    const authenticated = buildAuthenticatedUser(credentials);
+    setUser(authenticated);
+    await persistUser(authenticated);
   };
 
   const signup = async (email: string, password: string) => {
@@ -55,7 +76,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sendEmailVerification(credentials.idToken);
   };
 
-  const logout = () => setUser(null);
+  const logout = () => {
+    setUser(null);
+    void persistUser(null);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const restoreUser = async () => {
+      if (!authStateFile) {
+        setInitializing(false);
+        return;
+      }
+
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(authStateFile);
+        if (!fileInfo.exists) {
+          setInitializing(false);
+          return;
+        }
+
+        const content = await FileSystem.readAsStringAsync(authStateFile);
+        const storedUser = JSON.parse(content) as AuthenticatedUser;
+
+        if (storedUser && isMounted) {
+          setUser(storedUser);
+        }
+      } catch (error) {
+        console.warn('Não foi possível restaurar a sessão anterior', error);
+      } finally {
+        if (isMounted) {
+          setInitializing(false);
+        }
+      }
+    };
+
+    void restoreUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const hasRole = (allowed: UserRole | UserRole[]) => {
     const requiredRoles = Array.isArray(allowed) ? allowed : [allowed];

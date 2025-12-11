@@ -105,6 +105,8 @@ type InstructorDataContextValue = {
     sessionId: string,
     result: 'succeeded' | 'failed',
     failureReason?: string,
+    sessionOverride?: PaymentSession,
+    intentOverride?: PaymentIntent,
   ) => void;
 };
 
@@ -582,11 +584,17 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   );
 
   const processPaymentWebhook = useCallback(
-    (sessionId: string, result: 'succeeded' | 'failed', failureReason?: string) => {
-      const session = paymentSessions.find((item) => item.id === sessionId);
+    (
+      sessionId: string,
+      result: 'succeeded' | 'failed',
+      failureReason?: string,
+      sessionOverride?: PaymentSession,
+      intentOverride?: PaymentIntent,
+    ) => {
+      const session = sessionOverride ?? paymentSessions.find((item) => item.id === sessionId);
       if (!session) return;
 
-      const intent = paymentIntents.find((item) => item.id === session.intentId);
+      const intent = intentOverride ?? paymentIntents.find((item) => item.id === session.intentId);
       if (!intent) return;
 
       const nowIso = new Date().toISOString();
@@ -695,7 +703,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       }
 
       const session = startPaymentSession(intent.id, intent);
-      processPaymentWebhook(session.id, 'succeeded');
+      processPaymentWebhook(session.id, 'succeeded', undefined, session, intent);
 
       return { session, intent };
     },
