@@ -5,7 +5,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
-import { useRoleGuard } from '@/hooks/use-role-guard';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 const weekDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -28,8 +27,6 @@ const dateKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export default function CalendarScreen() {
-  useRoleGuard(['ADMIN', 'INSTRUCTOR']);
-
   const insets = useSafeAreaInsets();
   const { sessions, classes } = useInstructorData();
 
@@ -122,6 +119,30 @@ export default function CalendarScreen() {
         <ThemedText style={styles.muted}>
           Visualize o mês inteiro e toque em um dia com aulas para ver os horários disponíveis.
         </ThemedText>
+        <ThemedText style={styles.muted}>
+          Visualize o mês inteiro e toque em um dia com aulas para ver os horários disponíveis.
+        </ThemedText>
+
+        <ThemedView style={styles.card}>
+          <View style={styles.monthHeader}>
+            <Pressable onPress={() => handleMonthChange(-1)} style={styles.monthButton}>
+              <ThemedText type="defaultSemiBold">‹</ThemedText>
+            </Pressable>
+            <ThemedText type="subtitle" style={styles.monthTitle}>
+              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </ThemedText>
+            <Pressable onPress={() => handleMonthChange(1)} style={styles.monthButton}>
+              <ThemedText type="defaultSemiBold">›</ThemedText>
+            </Pressable>
+          </View>
+
+          <View style={styles.weekRow}>
+            {weekDays.map((day) => (
+              <ThemedText key={day} style={[styles.weekDay, styles.muted]}>
+                {day}
+              </ThemedText>
+            ))}
+          </View>
 
         <ThemedView style={styles.card}>
           <View style={styles.monthHeader}>

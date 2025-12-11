@@ -55,7 +55,7 @@ export default function ClassDetailsScreen() {
 
   if (!trainingClass) {
     return (
-      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+      <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top, paddingHorizontal: 20 }]}>
         <ThemedText style={styles.muted}>Aula não encontrada.</ThemedText>
       </SafeAreaView>
     );
@@ -85,8 +85,10 @@ export default function ClassDetailsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={[styles.container, { paddingTop: Math.max(insets.top, 12) }]}
+        showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           {trainingClass.title}
         </ThemedText>
