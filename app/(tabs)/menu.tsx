@@ -11,7 +11,11 @@ const actions = [
   { title: 'Gerenciar conta', description: 'Atualize plano, dados pessoais e preferências.' },
   { title: 'Definir meta', description: 'Cadastre um novo objetivo de força ou condicionamento.' },
   { title: 'Fale conosco', description: 'Envie uma mensagem rápida para a equipe do box.' },
-  { title: 'Realizar pagamento', description: 'Quite mensalidades ou pagamentos avulsos.' },
+  {
+    title: 'Realizar pagamento',
+    description: 'Quite mensalidades ou pagamentos avulsos.',
+    href: '/payments' as const,
+  },
   { title: 'Notificações', description: 'Controle lembretes e alertas das aulas.' },
 ];
 
@@ -19,7 +23,7 @@ export default function MenuScreen() {
   const insets = useSafeAreaInsets();
   const { hasRole } = useAuth();
 
-  const showPaymentTile = false;
+  const showPaymentTile = true;
   const visibleActions = showPaymentTile
     ? actions
     : actions.filter((item) => item.title !== 'Realizar pagamento');
@@ -28,6 +32,7 @@ export default function MenuScreen() {
     ? [
         { title: 'Painel do instrutor', href: '/instructor/dashboard' as const },
         { title: 'Aulas e sessões', href: '/instructor/classes' as const },
+        { title: 'Cobranças e pagamentos', href: '/instructor/payments' as const },
       ]
     : [];
 
@@ -43,15 +48,31 @@ export default function MenuScreen() {
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Ações rápidas</ThemedText>
           <View style={styles.list}>
-            {visibleActions.map((item) => (
-              <Pressable key={item.title} style={styles.listItem}>
-                <View style={styles.listText}>
-                  <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
-                  <ThemedText style={styles.muted}>{item.description}</ThemedText>
+            {visibleActions.map((item) => {
+              const content = (
+                <Pressable style={styles.listItem}>
+                  <View style={styles.listText}>
+                    <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
+                    <ThemedText style={styles.muted}>{item.description}</ThemedText>
+                  </View>
+                  <ThemedText type="default">›</ThemedText>
+                </Pressable>
+              );
+
+              if (item.href) {
+                return (
+                  <Link key={item.title} href={item.href} asChild>
+                    {content}
+                  </Link>
+                );
+              }
+
+              return (
+                <View key={item.title}>
+                  {content}
                 </View>
-                <ThemedText type="default">›</ThemedText>
-              </Pressable>
-            ))}
+              );
+            })}
           </View>
         </ThemedView>
 

@@ -119,19 +119,22 @@ export default function InstructorDashboardScreen() {
               <View style={styles.rosterList}>
                 {roster.map((entry) => {
                   const nextSession = sessions.find((session) => session.classId === trainingClass.id);
+                  const paymentCleared = entry.paymentStatus === 'paid';
                   return (
                     <View key={entry.enrollment.id} style={styles.rosterRow}>
                       <View style={styles.rosterText}>
                         <ThemedText type="defaultSemiBold">{entry.student.fullName}</ThemedText>
                         <ThemedText style={styles.muted}>
                           {entry.enrollment.status === 'waitlist' ? 'Lista de espera' : 'Confirmado'} ·
-                          {entry.paymentLabel === 'Pago' ? ' sem pendências' : ` ${entry.paymentLabel}`}
+                          {entry.paymentLabel === 'Pago'
+                            ? ' sem pendências'
+                            : ` ${entry.paymentLabel} · pagamento requerido`}
                         </ThemedText>
                       </View>
                       <View style={styles.rosterActions}>
                         <Pressable
                           style={[styles.checkButton, styles.presentButton]}
-                          disabled={!nextSession}
+                          disabled={!nextSession || !paymentCleared}
                           onPress={() =>
                             nextSession && handleCheckIn(nextSession.id, entry.enrollment.id, 'present')
                           }>
