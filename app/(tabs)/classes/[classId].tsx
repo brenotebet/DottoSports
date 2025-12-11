@@ -122,7 +122,7 @@ export default function ClassDetailsScreen() {
             Valor total estimado: <ThemedText type="defaultSemiBold">R$ {totalPrice.toFixed(2)}</ThemedText>
           </ThemedText>
           <ThemedText style={styles.muted}>
-            O pagamento é feito pelo menu em "Realizar pagamento" quando estiver disponível.
+            O pagamento é feito pelo menu em &quot;Realizar pagamento&quot; quando estiver disponível.
           </ThemedText>
           <Pressable style={styles.primaryButton} onPress={handleEnroll} disabled={!currentStudentId}>
             <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
