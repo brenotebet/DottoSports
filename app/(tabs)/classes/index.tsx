@@ -61,7 +61,7 @@ export default function ClassCatalogScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 6 }]}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           Encontre sua próxima aula
@@ -111,7 +111,7 @@ export default function ClassCatalogScreen() {
               <Link key={trainingClass.id} href={`/classes/${trainingClass.id}`} asChild>
                 <Pressable style={styles.card}>
                   <View style={styles.cardHeader}>
-                    <View style={{ gap: 6 }}>
+                    <View style={styles.titleBlock}>
                       <ThemedText type="subtitle">{trainingClass.title}</ThemedText>
                       <ThemedText style={styles.muted}>{trainingClass.description}</ThemedText>
                     </View>
@@ -234,6 +234,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 10,
+    alignItems: 'flex-start',
+  },
+  titleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
   },
   capacityPill: {
     alignSelf: 'flex-start',
