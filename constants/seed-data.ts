@@ -56,15 +56,15 @@ export const instructorProfiles: InstructorProfile[] = [
     userId: 'user-instructor-1',
     fullName: 'Coach Marina',
     bio: 'Especialista em condicionamento metabólico e força.',
-    specialties: ['Crossfit', 'Weightlifting'],
-    certifications: ['Crossfit L2', 'Primeiros Socorros'],
+    specialties: ['Crossfit', 'Levantamento Olímpico'],
+    certifications: ['Crossfit Nível 2', 'Primeiros Socorros'],
     hourlyRate: 180,
-    languages: ['pt-BR', 'en-US'],
+    languages: ['pt-BR'],
     experienceYears: 6,
     availability: [
-      { day: 'Mon', start: '06:00', end: '10:00' },
-      { day: 'Wed', start: '16:00', end: '21:00' },
-      { day: 'Fri', start: '06:00', end: '12:00' },
+      { day: 'Seg', start: '06:00', end: '10:00' },
+      { day: 'Qua', start: '16:00', end: '21:00' },
+      { day: 'Sex', start: '06:00', end: '12:00' },
     ],
   },
 ];
@@ -89,14 +89,14 @@ export const studentProfiles: StudentProfile[] = [
 export const classes: TrainingClass[] = [
   {
     id: 'class-1',
-    title: 'Cross Training Power',
-    description: 'Aula combinando força, técnica e condicionamento.',
+    title: 'Cross Training de Potência',
+    description: 'Aula combinando força, técnica e condicionamento avançado.',
     level: 'intermediate',
     category: 'crossfit',
     capacity: 16,
     schedule: [
-      { day: 'Mon', start: '06:00', end: '07:00', location: 'Área principal' },
-      { day: 'Wed', start: '18:00', end: '19:00', location: 'Área principal' },
+      { day: 'Seg', start: '06:00', end: '07:00', location: 'Área principal' },
+      { day: 'Qua', start: '18:00', end: '19:00', location: 'Área principal' },
     ],
     tags: ['metcon', 'força', 'team'],
     instructorId: 'instructor-1',
@@ -106,13 +106,13 @@ export const classes: TrainingClass[] = [
   {
     id: 'class-2',
     title: 'Técnica de Snatch',
-    description: 'Sessão voltada para técnica de levantamento olímpico.',
+    description: 'Sessão voltada para técnica detalhada de levantamento olímpico.',
     level: 'advanced',
     category: 'weightlifting',
     capacity: 10,
     schedule: [
-      { day: 'Tue', start: '12:00', end: '13:00', location: 'Plataforma de LPO' },
-      { day: 'Thu', start: '19:00', end: '20:15', location: 'Plataforma de LPO' },
+      { day: 'Ter', start: '12:00', end: '13:00', location: 'Plataforma de LPO' },
+      { day: 'Qui', start: '19:00', end: '20:15', location: 'Plataforma de LPO' },
     ],
     tags: ['técnica', 'LPO'],
     instructorId: 'instructor-1',
@@ -174,6 +174,7 @@ export const payments: Payment[] = [
     method: 'pix',
     status: 'pending',
     dueDate: '2024-12-15',
+    description: 'Mensalidade dezembro',
   },
 ];
 
