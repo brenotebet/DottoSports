@@ -92,6 +92,7 @@ export type Attendance = {
 export type Payment = {
   id: string;
   studentId: string;
+  enrollmentId?: string;
   amount: number;
   currency: 'USD' | 'BRL' | 'EUR';
   method: 'credit_card' | 'pix' | 'cash';
@@ -100,14 +101,60 @@ export type Payment = {
   paidAt?: string;
   description?: string;
   invoiceId?: string;
+  receiptId?: string;
+};
+
+export type PaymentIntent = {
+  id: string;
+  paymentId: string;
+  enrollmentId: string;
+  amount: number;
+  currency: Payment['currency'];
+  paymentMethod: Payment['method'];
+  status: 'requires_payment_method' | 'processing' | 'succeeded' | 'failed' | 'canceled';
+  clientSecret: string;
+};
+
+export type PaymentSession = {
+  id: string;
+  intentId: string;
+  status: 'open' | 'completed' | 'expired';
+  checkoutUrl: string;
+  createdAt: string;
+  expiresAt: string;
+  lastWebhookStatus?: 'succeeded' | 'failed';
+  failureReason?: string;
 };
 
 export type Invoice = {
   id: string;
   paymentId: string;
+  enrollmentId: string;
   issueDate: string;
   reference: string;
+  total: number;
+  currency: Payment['currency'];
+  status: 'open' | 'paid' | 'void';
   notes?: string;
+};
+
+export type Receipt = {
+  id: string;
+  paymentId: string;
+  enrollmentId: string;
+  issuedAt: string;
+  downloadUrl: string;
+  reference: string;
+};
+
+export type Settlement = {
+  id: string;
+  period: string;
+  gross: number;
+  fees: number;
+  net: number;
+  depositedAt: string;
+  receiptIds: string[];
 };
 
 export type DatabaseSchema = {
@@ -120,4 +167,8 @@ export type DatabaseSchema = {
   attendance: Attendance[];
   payments: Payment[];
   invoices: Invoice[];
+  receipts: Receipt[];
+  paymentIntents: PaymentIntent[];
+  paymentSessions: PaymentSession[];
+  settlements: Settlement[];
 };
