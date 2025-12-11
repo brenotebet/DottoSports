@@ -15,25 +15,22 @@ export default function ClassDetailsScreen() {
   const insets = useSafeAreaInsets();
   const {
     classes,
-    sessions,
     rosterByClass,
     ensureStudentProfile,
     enrollStudentInClass,
     getCapacityUsage,
     getEnrollmentForStudent,
-    recordCheckIn,
-    chargeStoredCard,
-    createOneTimePayment,
-    cardOnFile,
   } = useInstructorData();
 
   const [statusMessage, setStatusMessage] = useState('');
-  const [paymentMessage, setPaymentMessage] = useState('');
-  const [checkInMessage, setCheckInMessage] = useState('');
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
+  const [totalPrice] = useState(120);
 
   const trainingClass = useMemo(() => classes.find((item) => item.id === classId), [classes, classId]);
-  const capacity = useMemo(() => (classId ? getCapacityUsage(classId) : { active: 0, capacity: 0, available: 0 }), [classId, getCapacityUsage]);
+  const capacity = useMemo(
+    () => (classId ? getCapacityUsage(classId) : { active: 0, capacity: 0, available: 0 }),
+    [classId, getCapacityUsage],
+  );
 
   useEffect(() => {
     if (user) {
@@ -43,12 +40,6 @@ export default function ClassDetailsScreen() {
   }, [ensureStudentProfile, user]);
 
   const rosterEntries = useMemo(() => rosterByClass[classId ?? ''] ?? [], [classId, rosterByClass]);
-  const nextSession = useMemo(() => {
-    if (!classId) return null;
-    return sessions
-      .filter((session) => session.classId === classId)
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
-  }, [classId, sessions]);
 
   const existingEnrollment = useMemo(() => {
     if (!currentStudentId || !classId) return undefined;
@@ -93,55 +84,6 @@ export default function ClassDetailsScreen() {
     });
   };
 
-  const handleChargeCard = () => {
-    if (!currentStudentId) return;
-    confirmAction('Cobrar cartão', 'Deseja cobrar R$ 95 do cartão salvo?', () => {
-      const payment = chargeStoredCard(
-        currentStudentId,
-        95,
-        `Pagamento único para ${trainingClass.title}`,
-      );
-      const message = `Cobrança realizada (${payment.description}).`;
-      setPaymentMessage(message);
-      Alert.alert('Cobrança enviada', message);
-    });
-  };
-
-  const handleOneTimePayment = () => {
-    if (!currentStudentId) return;
-    confirmAction('Gerar pagamento avulso', 'Deseja gerar um pagamento avulso de R$ 120 via Pix?', () => {
-      const payment = createOneTimePayment(
-        currentStudentId,
-        120,
-        'pix',
-        `Pagamento avulso para ${trainingClass.title}`,
-      );
-      const message =
-        payment.status === 'paid'
-          ? 'Pagamento confirmado automaticamente.'
-          : 'Pagamento gerado. Aguarde confirmação.';
-      setPaymentMessage(message);
-      Alert.alert('Pagamento gerado', message);
-    });
-  };
-
-  const handleCheckIn = (method: 'qr' | 'manual') => {
-    if (!existingEnrollment || !nextSession) {
-      const message = 'Faça a inscrição e aguarde uma sessão válida para registrar presença.';
-      setCheckInMessage(message);
-      Alert.alert('Check-in indisponível', message);
-      return;
-    }
-
-    const modeLabel = method === 'qr' ? 'QR Code' : 'manual';
-    confirmAction('Confirmar check-in', `Registrar presença via ${modeLabel}?`, () => {
-      const attendance = recordCheckIn(nextSession.id, existingEnrollment.id, method);
-      const message = `Check-in registrado (${attendance.notes}).`;
-      setCheckInMessage(message);
-      Alert.alert('Presença confirmada', message);
-    });
-  };
-
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
@@ -175,6 +117,12 @@ export default function ClassDetailsScreen() {
           <ThemedText style={styles.muted}>
             Para confirmar sua vaga precisamos vincular sua conta e respeitar a capacidade da turma.
           </ThemedText>
+          <ThemedText style={styles.priceRow}>
+            Valor total estimado: <ThemedText type="defaultSemiBold">R$ {totalPrice.toFixed(2)}</ThemedText>
+          </ThemedText>
+          <ThemedText style={styles.muted}>
+            O pagamento é feito pelo menu em "Realizar pagamento" quando estiver disponível.
+          </ThemedText>
           <Pressable style={styles.primaryButton} onPress={handleEnroll} disabled={!currentStudentId}>
             <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
               {existingEnrollment ? 'Atualizar inscrição' : 'Inscrever nesta aula'}
@@ -186,64 +134,6 @@ export default function ClassDetailsScreen() {
               Status atual: {existingEnrollment.status === 'waitlist' ? 'Lista de espera' : 'Confirmado'}
             </ThemedText>
           )}
-        </ThemedView>
-
-        <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Pagamento e checkout</ThemedText>
-          <ThemedText style={styles.muted}>
-            Use o cartão em arquivo para cobranças rápidas ou gere um pagamento avulso.
-          </ThemedText>
-          <ThemedView style={styles.cardOnFile}>
-            <ThemedText type="defaultSemiBold">{cardOnFile.label}</ThemedText>
-            <ThemedText style={styles.muted}>
-              Validade {cardOnFile.expMonth}/{cardOnFile.expYear} · {cardOnFile.brand}
-            </ThemedText>
-          </ThemedView>
-          <View style={styles.rowBetween}>
-            <Pressable style={styles.secondaryButton} onPress={handleChargeCard}>
-              <ThemedText type="defaultSemiBold" style={styles.secondaryText}>
-                Cobrar R$ 95
-              </ThemedText>
-            </Pressable>
-            <Pressable style={styles.outlineButton} onPress={handleOneTimePayment}>
-              <ThemedText type="defaultSemiBold" style={styles.outlineText}>
-                Gerar pagamento avulso
-              </ThemedText>
-            </Pressable>
-          </View>
-          {paymentMessage ? <ThemedText style={styles.statusText}>{paymentMessage}</ThemedText> : null}
-        </ThemedView>
-
-        <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Check-in rápido</ThemedText>
-          <ThemedText style={styles.muted}>
-            Confirme presença com QR Code ou manualmente. O registro é salvo na sua inscrição.
-          </ThemedText>
-          {nextSession ? (
-            <ThemedText style={styles.muted}>
-              Próxima sessão: {new Date(nextSession.startTime).toLocaleString('pt-BR', {
-                weekday: 'short',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}{' '}
-              · {nextSession.location}
-            </ThemedText>
-          ) : (
-            <ThemedText style={styles.muted}>Nenhuma sessão futura configurada.</ThemedText>
-          )}
-          <View style={styles.rowBetween}>
-            <Pressable style={styles.secondaryButton} onPress={() => handleCheckIn('qr')}>
-              <ThemedText type="defaultSemiBold" style={styles.secondaryText}>
-                Escanear QR
-              </ThemedText>
-            </Pressable>
-            <Pressable style={styles.primaryButton} onPress={() => handleCheckIn('manual')}>
-              <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
-                Check-in manual
-              </ThemedText>
-            </Pressable>
-          </View>
-          {checkInMessage ? <ThemedText style={styles.statusText}>{checkInMessage}</ThemedText> : null}
         </ThemedView>
 
         <ThemedView style={styles.card}>
@@ -332,6 +222,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#dce9f5',
   },
+  priceRow: {
+    marginTop: 4,
+  },
   primaryButton: {
     backgroundColor: '#0e9aed',
     paddingVertical: 12,
@@ -340,37 +233,6 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#022a4c',
-  },
-  secondaryButton: {
-    backgroundColor: '#e5f3ff',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    flex: 1,
-  },
-  secondaryText: {
-    color: '#0b3b5a',
-    textAlign: 'center',
-  },
-  outlineButton: {
-    borderWidth: 1,
-    borderColor: '#0e9aed',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    flex: 1,
-    alignItems: 'center',
-  },
-  outlineText: {
-    color: '#0e426a',
-    textAlign: 'center',
-  },
-  cardOnFile: {
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: '#e6f2ff',
-    gap: 4,
   },
   statusText: {
     marginTop: 6,

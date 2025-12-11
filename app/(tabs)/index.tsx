@@ -229,11 +229,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     flexWrap: 'wrap',
   },
-  rowActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
-  },
   checkInText: {
     color: '#fff',
   },

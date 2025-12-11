@@ -19,6 +19,11 @@ export default function MenuScreen() {
   const insets = useSafeAreaInsets();
   const { hasRole } = useAuth();
 
+  const showPaymentTile = false;
+  const visibleActions = showPaymentTile
+    ? actions
+    : actions.filter((item) => item.title !== 'Realizar pagamento');
+
   const instructorActions = hasRole(['INSTRUCTOR', 'ADMIN'])
     ? [
         { title: 'Painel do instrutor', href: '/instructor/dashboard' as const },
@@ -38,7 +43,7 @@ export default function MenuScreen() {
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Ações rápidas</ThemedText>
           <View style={styles.list}>
-            {actions.map((item) => (
+            {visibleActions.map((item) => (
               <Pressable key={item.title} style={styles.listItem}>
                 <View style={styles.listText}>
                   <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
