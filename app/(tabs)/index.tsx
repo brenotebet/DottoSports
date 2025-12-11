@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View, Pressable } from 'react-native';
+import { ScrollView, StyleSheet, View, Pressable, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -61,11 +61,24 @@ export default function DashboardScreen() {
 
   const handleQuickCheckIn = () => {
     if (!studentId || !upcomingSession || !enrollment) {
-      setCheckInStatus('Inscreva-se primeiro para habilitar o check-in.');
+      const message = 'Inscreva-se primeiro para habilitar o check-in.';
+      setCheckInStatus(message);
+      Alert.alert('Check-in indisponível', message);
       return;
     }
-    recordCheckIn(upcomingSession.id, enrollment.id, 'manual');
-    setCheckInStatus('Presença registrada para a próxima sessão.');
+
+    Alert.alert('Confirmar check-in rápido', 'Tem certeza que deseja registrar presença agora?', [
+      { text: 'Não', style: 'cancel' },
+      {
+        text: 'Sim',
+        onPress: () => {
+          recordCheckIn(upcomingSession.id, enrollment.id, 'manual');
+          const message = 'Presença registrada para a próxima sessão.';
+          setCheckInStatus(message);
+          Alert.alert('Check-in concluído', message);
+        },
+      },
+    ]);
   };
 
   return (
@@ -208,6 +221,13 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
+    flex: 1,
+  },
+  rowActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+    flexWrap: 'wrap',
   },
   rowActions: {
     flexDirection: 'row',

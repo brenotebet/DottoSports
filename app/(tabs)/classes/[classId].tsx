@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -55,6 +55,13 @@ export default function ClassDetailsScreen() {
     return getEnrollmentForStudent(currentStudentId, classId);
   }, [classId, currentStudentId, getEnrollmentForStudent]);
 
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+    Alert.alert(title, message, [
+      { text: 'Não', style: 'cancel' },
+      { text: 'Sim', onPress: onConfirm },
+    ]);
+  };
+
   if (!trainingClass) {
     return (
       <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
@@ -65,51 +72,74 @@ export default function ClassDetailsScreen() {
 
   const handleEnroll = () => {
     if (!currentStudentId) return;
-    const result = enrollStudentInClass(currentStudentId, trainingClass.id);
-    if (result.alreadyEnrolled) {
-      setStatusMessage('Você já está inscrito nesta aula.');
-      return;
-    }
+    confirmAction('Confirmar inscrição', 'Tem certeza que deseja se inscrever nesta aula?', () => {
+      const result = enrollStudentInClass(currentStudentId, trainingClass.id);
+      if (result.alreadyEnrolled) {
+        const message = 'Você já está inscrito nesta aula.';
+        setStatusMessage(message);
+        Alert.alert('Nenhuma alteração', message);
+        return;
+      }
 
-    if (result.isWaitlist) {
-      setStatusMessage('Capacidade cheia. Você entrou na lista de espera.');
-    } else {
-      setStatusMessage('Inscrição confirmada! Você já tem vaga nesta turma.');
-    }
+      if (result.isWaitlist) {
+        const message = 'Capacidade cheia. Você entrou na lista de espera.';
+        setStatusMessage(message);
+        Alert.alert('Inscrição processada', message);
+      } else {
+        const message = 'Inscrição confirmada! Você já tem vaga nesta turma.';
+        setStatusMessage(message);
+        Alert.alert('Inscrição confirmada', message);
+      }
+    });
   };
 
   const handleChargeCard = () => {
     if (!currentStudentId) return;
-    const payment = chargeStoredCard(
-      currentStudentId,
-      95,
-      `Pagamento único para ${trainingClass.title}`,
-    );
-    setPaymentMessage(`Cobrança realizada (${payment.description}).`);
+    confirmAction('Cobrar cartão', 'Deseja cobrar R$ 95 do cartão salvo?', () => {
+      const payment = chargeStoredCard(
+        currentStudentId,
+        95,
+        `Pagamento único para ${trainingClass.title}`,
+      );
+      const message = `Cobrança realizada (${payment.description}).`;
+      setPaymentMessage(message);
+      Alert.alert('Cobrança enviada', message);
+    });
   };
 
   const handleOneTimePayment = () => {
     if (!currentStudentId) return;
-    const payment = createOneTimePayment(
-      currentStudentId,
-      120,
-      'pix',
-      `Pagamento avulso para ${trainingClass.title}`,
-    );
-    setPaymentMessage(
-      payment.status === 'paid'
-        ? 'Pagamento confirmado automaticamente.'
-        : 'Pagamento gerado. Aguarde confirmação.',
-    );
+    confirmAction('Gerar pagamento avulso', 'Deseja gerar um pagamento avulso de R$ 120 via Pix?', () => {
+      const payment = createOneTimePayment(
+        currentStudentId,
+        120,
+        'pix',
+        `Pagamento avulso para ${trainingClass.title}`,
+      );
+      const message =
+        payment.status === 'paid'
+          ? 'Pagamento confirmado automaticamente.'
+          : 'Pagamento gerado. Aguarde confirmação.';
+      setPaymentMessage(message);
+      Alert.alert('Pagamento gerado', message);
+    });
   };
 
   const handleCheckIn = (method: 'qr' | 'manual') => {
     if (!existingEnrollment || !nextSession) {
-      setCheckInMessage('Faça a inscrição e aguarde uma sessão válida para registrar presença.');
+      const message = 'Faça a inscrição e aguarde uma sessão válida para registrar presença.';
+      setCheckInMessage(message);
+      Alert.alert('Check-in indisponível', message);
       return;
     }
-    const attendance = recordCheckIn(nextSession.id, existingEnrollment.id, method);
-    setCheckInMessage(`Check-in registrado (${attendance.notes}).`);
+
+    const modeLabel = method === 'qr' ? 'QR Code' : 'manual';
+    confirmAction('Confirmar check-in', `Registrar presença via ${modeLabel}?`, () => {
+      const attendance = recordCheckIn(nextSession.id, existingEnrollment.id, method);
+      const message = `Check-in registrado (${attendance.notes}).`;
+      setCheckInMessage(message);
+      Alert.alert('Presença confirmada', message);
+    });
   };
 
   return (
@@ -265,6 +295,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 10,
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
   },
   capacityPill: {
     backgroundColor: '#022a4c',
