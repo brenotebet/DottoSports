@@ -47,8 +47,9 @@ export default function ClassCatalogScreen() {
     return futureSessions[0];
   };
 
-  const renderChip = (label: string, active: boolean, onPress: () => void) => (
+  const renderChip = (label: string, active: boolean, onPress: () => void, key: string) => (
     <Pressable
+      key={key}
       onPress={onPress}
       style={[styles.chip, active && styles.chipActive, active && { borderColor: Colors[colorScheme ?? 'light'].tint }]}>
       <ThemedText
@@ -82,8 +83,11 @@ export default function ClassCatalogScreen() {
             <ThemedText type="defaultSemiBold">Categorias</ThemedText>
             <View style={styles.chipRow}>
               {categories.map((category) =>
-                renderChip(category === 'all' ? 'Todas' : category, categoryFilter === category, () =>
-                  setCategoryFilter(category),
+                renderChip(
+                  category === 'all' ? 'Todas' : category,
+                  categoryFilter === category,
+                  () => setCategoryFilter(category),
+                  category,
                 ),
               )}
             </View>
@@ -93,7 +97,7 @@ export default function ClassCatalogScreen() {
             <ThemedText type="defaultSemiBold">Nível</ThemedText>
             <View style={styles.chipRow}>
               {levels.map((level) =>
-                renderChip(level === 'all' ? 'Todos' : level, levelFilter === level, () => setLevelFilter(level)),
+                renderChip(level === 'all' ? 'Todos' : level, levelFilter === level, () => setLevelFilter(level), level),
               )}
             </View>
           </View>

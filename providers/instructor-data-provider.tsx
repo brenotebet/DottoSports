@@ -113,12 +113,14 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [students, setStudents] = useState<StudentProfile[]>(studentProfiles);
   const [cardOnFile, setCardOnFile] = useState<CardOnFile>(defaultCard);
 
-  const ensureStudentProfile = useCallback(
-    (email: string, displayName: string) => {
-      const existingAccount = findAccountByEmail(email);
-      const resolvedUserId = existingAccount?.id ?? generateId('user');
-      const existingProfile = students.find((profile) => profile.userId === resolvedUserId);
-      if (existingProfile) return existingProfile;
+  const ensureStudentProfile = useCallback((email: string, displayName: string) => {
+    const existingAccount = findAccountByEmail(email);
+    const resolvedUserId = existingAccount?.id ?? `user-${email.toLowerCase()}`;
+    let resolvedProfile: StudentProfile | undefined;
+
+    setStudents((prev) => {
+      resolvedProfile = prev.find((profile) => profile.userId === resolvedUserId);
+      if (resolvedProfile) return prev;
 
       const newProfile: StudentProfile = {
         id: generateId('student'),
@@ -131,11 +133,28 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         emergencyContact: { name: 'Contato padrão', phone: '+55 11 98888-0000' },
       };
 
-      setStudents((prev) => [...prev, newProfile]);
-      return newProfile;
-    },
-    [students],
-  );
+      resolvedProfile = newProfile;
+      return [...prev, newProfile];
+    });
+
+    if (!resolvedProfile) {
+      const fallbackProfile: StudentProfile = {
+        id: generateId('student'),
+        userId: resolvedUserId,
+        fullName: displayName || email,
+        phone: '+55 11 99999-0000',
+        birthDate: '1995-01-01',
+        experienceLevel: 'beginner',
+        goals: ['Entrar em forma e manter consistência'],
+        emergencyContact: { name: 'Contato padrão', phone: '+55 11 98888-0000' },
+      };
+
+      resolvedProfile = fallbackProfile;
+      setStudents((prev) => [...prev, fallbackProfile]);
+    }
+
+    return resolvedProfile;
+  }, []);
 
   const getEnrollmentForStudent = useCallback(
     (studentId: string, classId: string) =>
@@ -309,7 +328,19 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         return [...prev, created];
       });
 
-      return created!;
+      if (!created) {
+        created = {
+          id: generateId('attendance'),
+          sessionId,
+          enrollmentId,
+          status: 'present',
+          checkedInAt: new Date().toISOString(),
+          notes: note,
+        };
+        setAttendance((prev) => [...prev, created!]);
+      }
+
+      return created;
     },
     [],
   );
