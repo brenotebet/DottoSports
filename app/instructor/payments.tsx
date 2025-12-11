@@ -1,15 +1,15 @@
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
+import { TopBar } from '@/components/top-bar';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 const formatBRL = (amount: number) => `R$ ${amount.toFixed(2)}`;
 
 export default function InstructorPaymentsScreen() {
-  const insets = useSafeAreaInsets();
   const {
     outstandingBalances,
     paymentIntents,
@@ -84,7 +84,8 @@ export default function InstructorPaymentsScreen() {
   const recentReceipts = receipts.slice(0, 4);
 
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
+      <TopBar title="Cobranças e pagamentos" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           Cobranças e liquidações
@@ -241,6 +242,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
   },
   balanceText: {
     gap: 4,
@@ -283,6 +285,7 @@ const styles = StyleSheet.create({
   webhookRow: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
   },
   webhookButton: {
     paddingHorizontal: 10,

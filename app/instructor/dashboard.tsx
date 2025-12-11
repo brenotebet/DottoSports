@@ -1,14 +1,14 @@
 import { Link } from 'expo-router';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TopBar } from '@/components/top-bar';
 import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 export default function InstructorDashboardScreen() {
-  const insets = useSafeAreaInsets();
   const { sessions, classes, rosterByClass, toggleAttendance } = useInstructorData();
 
   const upcomingSessions = sessions.slice(0, 3);
@@ -45,7 +45,8 @@ export default function InstructorDashboardScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
+      <TopBar title="Painel do instrutor" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           Monitoramento do box

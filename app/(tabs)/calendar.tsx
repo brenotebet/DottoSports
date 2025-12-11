@@ -44,7 +44,7 @@ export default function CalendarScreen() {
   const [selectedDate, setSelectedDate] = useState(firstSessionDate);
 
   const sessionsByDay = useMemo(() => {
-    const map: Record<string, Array<{ classTitle: string; location: string; time: string }>> = {};
+    const map: Record<string, { classTitle: string; location: string; time: string }[]> = {};
     sessions.forEach((session) => {
       const sessionDate = new Date(session.startTime);
       const key = dateKey(sessionDate);
