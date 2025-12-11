@@ -8,6 +8,8 @@ import { ThemedView } from '@/components/themed-view';
 import { TopBar } from '@/components/top-bar';
 import { Colors } from '@/constants/theme';
 
+export const options = { headerShown: false };
+
 function formatTime(totalSeconds: number) {
   const minutes = Math.floor(totalSeconds / 60)
     .toString()

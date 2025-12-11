@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { TopBar } from '@/components/top-bar';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
+export const options = { headerShown: false };
+
 export default function PaymentsScreen() {
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
   const { outstandingBalances, ensureStudentProfile, cardOnFile, payOutstandingPayment } =
     useInstructorData();
   const [studentId, setStudentId] = useState<string | null>(null);
@@ -53,7 +55,8 @@ export default function PaymentsScreen() {
   const nextDue = studentBalances[0]?.payment.dueDate;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+      <TopBar title="Pagamentos" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           Seus pagamentos
