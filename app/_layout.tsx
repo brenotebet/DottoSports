@@ -12,6 +12,7 @@ import { InteractionManager } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/providers/auth-provider';
+import { InstructorDataProvider } from '@/providers/instructor-data-provider';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -54,13 +55,15 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AuthGate>
-          {/* Root layout always renders a navigator (Slot) on the first render */}
-          <Slot />
-          <StatusBar style="auto" />
-        </AuthGate>
-      </ThemeProvider>
+      <InstructorDataProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <AuthGate>
+            {/* Root layout always renders a navigator (Slot) on the first render */}
+            <Slot />
+            <StatusBar style="auto" />
+          </AuthGate>
+        </ThemeProvider>
+      </InstructorDataProvider>
     </AuthProvider>
   );
 }
