@@ -18,6 +18,7 @@ export default function InstructorLayout() {
       }}>
       <Stack.Screen name="dashboard" options={{ title: 'Painel do instrutor' }} />
       <Stack.Screen name="classes" options={{ title: 'Aulas e sessões' }} />
+      <Stack.Screen name="payments" options={{ title: 'Cobranças e pagamentos' }} />
     </Stack>
   );
 }

@@ -19,7 +19,7 @@ export default function MenuScreen() {
   const insets = useSafeAreaInsets();
   const { hasRole } = useAuth();
 
-  const showPaymentTile = false;
+  const showPaymentTile = true;
   const visibleActions = showPaymentTile
     ? actions
     : actions.filter((item) => item.title !== 'Realizar pagamento');
@@ -28,6 +28,7 @@ export default function MenuScreen() {
     ? [
         { title: 'Painel do instrutor', href: '/instructor/dashboard' as const },
         { title: 'Aulas e sessões', href: '/instructor/classes' as const },
+        { title: 'Cobranças e pagamentos', href: '/instructor/payments' as const },
       ]
     : [];
 
