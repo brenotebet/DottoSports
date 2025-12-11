@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View, Pressable, Alert } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -228,11 +228,6 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 10,
     flexWrap: 'wrap',
-  },
-  rowActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
   },
   checkInText: {
     color: '#fff',
