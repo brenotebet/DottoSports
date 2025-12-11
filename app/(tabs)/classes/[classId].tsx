@@ -1,10 +1,11 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TopBar } from '@/components/top-bar';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { useInstructorData } from '@/providers/instructor-data-provider';
@@ -12,7 +13,6 @@ import { useInstructorData } from '@/providers/instructor-data-provider';
 export default function ClassDetailsScreen() {
   const { classId } = useLocalSearchParams<{ classId: string }>();
   const { user } = useAuth();
-  const insets = useSafeAreaInsets();
   const {
     classes,
     rosterByClass,
@@ -55,9 +55,11 @@ export default function ClassDetailsScreen() {
 
   if (!trainingClass) {
     return (
-      <SafeAreaView
-        style={[styles.safeArea, { paddingTop: insets.top + 8, paddingHorizontal: 20 }]}>
-        <ThemedText style={styles.muted}>Aula não encontrada.</ThemedText>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+        <TopBar title="Detalhes da aula" />
+        <View style={styles.container}>
+          <ThemedText style={styles.muted}>Aula não encontrada.</ThemedText>
+        </View>
       </SafeAreaView>
     );
   }
@@ -86,7 +88,8 @@ export default function ClassDetailsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 8 }]}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+      <TopBar title="Detalhes da aula" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           {trainingClass.title}
