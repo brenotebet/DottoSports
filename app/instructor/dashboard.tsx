@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -25,12 +25,23 @@ export default function InstructorDashboardScreen() {
       label: entry.paymentLabel,
     }));
 
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+    Alert.alert(title, message, [
+      { text: 'Não', style: 'cancel' },
+      { text: 'Sim', onPress: onConfirm },
+    ]);
+  };
+
   const handleCheckIn = (
     sessionId: string,
     enrollmentId: string,
     status: 'present' | 'absent',
   ) => {
-    toggleAttendance(sessionId, enrollmentId, status);
+    const label = status === 'present' ? 'presença' : 'falta';
+    confirmAction('Confirmar atualização', `Deseja marcar ${label} para este aluno?`, () => {
+      toggleAttendance(sessionId, enrollmentId, status);
+      Alert.alert('Registro salvo', `Check-in atualizado como ${label}.`);
+    });
   };
 
   return (
@@ -213,9 +224,10 @@ const styles = StyleSheet.create({
   },
   sessionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 12,
+    flexWrap: 'wrap',
   },
   tagPill: {
     backgroundColor: '#0e9aed',
@@ -264,6 +276,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 8,
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
   },
   rosterList: {
     gap: 10,
@@ -272,6 +286,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
+    flexWrap: 'wrap',
     paddingVertical: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(0,0,0,0.08)',
@@ -284,6 +299,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
   checkButton: {
     paddingHorizontal: 12,
@@ -315,6 +331,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(0,0,0,0.08)',
     paddingBottom: 10,
+    flexWrap: 'wrap',
   },
   paymentBadge: {
     paddingHorizontal: 10,
@@ -340,6 +357,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
+    alignSelf: 'flex-start',
   },
   paymentLinkText: {
     color: '#0b3b5a',
