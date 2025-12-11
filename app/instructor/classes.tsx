@@ -37,7 +37,7 @@ const defaultClassForm: ClassFormState = {
   level: 'all',
   category: 'crossfit',
   capacity: '12',
-  scheduleDay: 'Mon',
+  scheduleDay: 'Seg',
   scheduleStart: '07:00',
   scheduleEnd: '08:00',
   scheduleLocation: 'Área principal',
@@ -86,9 +86,16 @@ export default function InstructorClassesScreen() {
     [sessions],
   );
 
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+    Alert.alert(title, message, [
+      { text: 'Não', style: 'cancel' },
+      { text: 'Sim', onPress: onConfirm },
+    ]);
+  };
+
   const handleSubmitClass = () => {
     if (!classForm.title || !classForm.capacity) {
-      Alert.alert('Preencha título e capacidade para salvar a aula.');
+      Alert.alert('Campos obrigatórios', 'Preencha título e capacidade para salvar a aula.');
       return;
     }
 
@@ -110,16 +117,24 @@ export default function InstructorClassesScreen() {
       instructorId: 'instructor-1',
     };
 
-    if (editingClassId) {
-      updateClass(editingClassId, payload);
-      Alert.alert('Aula atualizada');
-    } else {
-      createClass(payload);
-      Alert.alert('Nova aula criada');
-    }
+    const isEditing = Boolean(editingClassId);
+    const promptTitle = isEditing ? 'Atualizar aula' : 'Criar aula';
+    const promptMessage = isEditing
+      ? 'Deseja salvar as alterações desta aula?'
+      : 'Deseja criar esta nova aula?';
 
-    setClassForm(defaultClassForm);
-    setEditingClassId(null);
+    confirmAction(promptTitle, promptMessage, () => {
+      if (editingClassId) {
+        updateClass(editingClassId, payload);
+        Alert.alert('Aula atualizada', 'As mudanças foram salvas.');
+      } else {
+        createClass(payload);
+        Alert.alert('Nova aula criada', 'A aula foi cadastrada com sucesso.');
+      }
+
+      setClassForm(defaultClassForm);
+      setEditingClassId(null);
+    });
   };
 
   const handleEditClass = (id: string) => {
@@ -132,7 +147,7 @@ export default function InstructorClassesScreen() {
       level: target.level,
       category: target.category,
       capacity: String(target.capacity),
-      scheduleDay: target.schedule[0]?.day ?? 'Mon',
+        scheduleDay: target.schedule[0]?.day ?? 'Seg',
       scheduleStart: target.schedule[0]?.start ?? '07:00',
       scheduleEnd: target.schedule[0]?.end ?? '08:00',
       scheduleLocation: target.schedule[0]?.location ?? 'Box',
@@ -144,7 +159,14 @@ export default function InstructorClassesScreen() {
   const handleRemoveClass = (id: string) => {
     Alert.alert('Excluir aula', 'Tem certeza que deseja excluir esta aula e sessões relacionadas?', [
       { text: 'Cancelar', style: 'cancel' },
-      { text: 'Excluir', style: 'destructive', onPress: () => deleteClass(id) },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: () => {
+          deleteClass(id);
+          Alert.alert('Aula excluída', 'A aula e suas sessões foram removidas.');
+        },
+      },
     ]);
   };
 
@@ -164,16 +186,24 @@ export default function InstructorClassesScreen() {
       coachNotes: sessionForm.coachNotes,
     };
 
-    if (editingSessionId) {
-      updateSession(editingSessionId, payload);
-      Alert.alert('Sessão atualizada');
-    } else {
-      createSession(payload);
-      Alert.alert('Sessão criada');
-    }
+    const isEditing = Boolean(editingSessionId);
+    const promptTitle = isEditing ? 'Atualizar sessão' : 'Criar sessão';
+    const promptMessage = isEditing
+      ? 'Deseja salvar as alterações desta sessão?'
+      : 'Deseja criar esta nova sessão?';
 
-    setSessionForm({ ...defaultSessionForm, classId: classes[0]?.id ?? '' });
-    setEditingSessionId(null);
+    confirmAction(promptTitle, promptMessage, () => {
+      if (editingSessionId) {
+        updateSession(editingSessionId, payload);
+        Alert.alert('Sessão atualizada', 'A sessão foi atualizada com sucesso.');
+      } else {
+        createSession(payload);
+        Alert.alert('Sessão criada', 'A nova sessão foi agendada.');
+      }
+
+      setSessionForm({ ...defaultSessionForm, classId: classes[0]?.id ?? '' });
+      setEditingSessionId(null);
+    });
   };
 
   const handleEditSession = (id: string) => {
@@ -195,7 +225,14 @@ export default function InstructorClassesScreen() {
   const handleRemoveSession = (id: string) => {
     Alert.alert('Excluir sessão', 'Deseja remover esta sessão da agenda?', [
       { text: 'Cancelar', style: 'cancel' },
-      { text: 'Remover', style: 'destructive', onPress: () => deleteSession(id) },
+      {
+        text: 'Remover',
+        style: 'destructive',
+        onPress: () => {
+          deleteSession(id);
+          Alert.alert('Sessão removida', 'A sessão saiu da agenda.');
+        },
+      },
     ]);
   };
 
@@ -232,7 +269,7 @@ export default function InstructorClassesScreen() {
           <View style={styles.formRow}>
             <TextInput
               style={styles.input}
-              placeholder="Dia (ex: Mon)"
+              placeholder="Dia (ex: Seg)"
               value={classForm.scheduleDay}
               onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleDay: text }))}
             />
@@ -334,18 +371,18 @@ export default function InstructorClassesScreen() {
               onChangeText={(text) => setSessionForm((prev) => ({ ...prev, capacity: text }))}
             />
           </View>
-          <TextInput
-            style={styles.input}
-            placeholder="Início (ISO)"
-            value={sessionForm.startTime}
-            onChangeText={(text) => setSessionForm((prev) => ({ ...prev, startTime: text }))}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Fim (ISO)"
-            value={sessionForm.endTime}
-            onChangeText={(text) => setSessionForm((prev) => ({ ...prev, endTime: text }))}
-          />
+            <TextInput
+              style={styles.input}
+              placeholder="Início (ISO)"
+              value={sessionForm.startTime}
+              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, startTime: text }))}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Fim (ISO)"
+              value={sessionForm.endTime}
+              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, endTime: text }))}
+            />
           <TextInput
             style={styles.input}
             placeholder="Local"
@@ -448,6 +485,8 @@ const styles = StyleSheet.create({
   formRow: {
     flexDirection: 'row',
     gap: 10,
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
   },
   input: {
     flex: 1,
@@ -503,7 +542,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f4faff',
     flexDirection: 'row',
     gap: 12,
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
   },
   listText: {
     flex: 1,
@@ -529,7 +569,7 @@ const styles = StyleSheet.create({
   },
   actionColumn: {
     gap: 8,
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
   },
   linkButton: {
     backgroundColor: '#0e9aed',
