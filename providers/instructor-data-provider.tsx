@@ -670,6 +670,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         throw new Error('Cobrança não encontrada.');
       }
 
+      if (!payment.enrollmentId) {
+        throw new Error('Não foi possível localizar a matrícula associada a esta cobrança.');
+      }
+
       const existingIntent = paymentIntents.find(
         (item) => item.paymentId === paymentId && item.status !== 'succeeded',
       );
