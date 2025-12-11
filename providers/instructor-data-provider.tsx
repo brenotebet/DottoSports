@@ -65,6 +65,7 @@ type InstructorDataContextValue = {
   }[];
   cardOnFile: CardOnFile;
   rosterByClass: Record<string, RosterEntry[]>;
+  payOutstandingPayment: (paymentId: string) => { session: PaymentSession; intent: PaymentIntent };
   createClass: (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateClass: (id: string, payload: Partial<TrainingClass>) => void;
   deleteClass: (id: string) => void;
@@ -662,6 +663,41 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [paymentIntents, paymentSessions],
   );
 
+  const payOutstandingPayment = useCallback(
+    (paymentId: string) => {
+      const payment = payments.find((item) => item.id === paymentId);
+      if (!payment) {
+        throw new Error('Cobrança não encontrada.');
+      }
+
+      const existingIntent = paymentIntents.find(
+        (item) => item.paymentId === paymentId && item.status !== 'succeeded',
+      );
+
+      const intent: PaymentIntent =
+        existingIntent ?? {
+          id: generateId('pi'),
+          paymentId,
+          enrollmentId: payment.enrollmentId,
+          amount: payment.amount,
+          currency: payment.currency,
+          paymentMethod: payment.method,
+          status: 'requires_payment_method',
+          clientSecret: `secret_${paymentId}`,
+        };
+
+      if (!existingIntent) {
+        setPaymentIntents((prev) => [intent, ...prev]);
+      }
+
+      const session = startPaymentSession(intent.id, intent);
+      processPaymentWebhook(session.id, 'succeeded');
+
+      return { session, intent };
+    },
+    [paymentIntents, payments, processPaymentWebhook, startPaymentSession],
+  );
+
   const updateCardOnFile = useCallback((payload: Partial<CardOnFile>) => {
     setCardOnFile((prev) => ({ ...prev, ...payload }));
   }, []);
@@ -682,6 +718,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       outstandingBalances,
       cardOnFile,
       rosterByClass,
+      payOutstandingPayment,
       createClass,
       updateClass,
       deleteClass,
@@ -717,6 +754,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       outstandingBalances,
       cardOnFile,
       rosterByClass,
+      payOutstandingPayment,
       ensureStudentProfile,
       enrollStudentInClass,
       getCapacityUsage,
