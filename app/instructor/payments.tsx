@@ -97,32 +97,39 @@ export default function InstructorPaymentsScreen() {
           )}
           {outstandingBalances.map((item) => {
             const enrollment = enrollments.find((en) => en.id === item.payment.enrollmentId);
+            const studentName = item.student?.fullName ?? 'Aluno sem nome';
             return (
               <View key={item.payment.id} style={styles.balanceRow}>
-                <View style={styles.balanceText}>
-                  <ThemedText type="defaultSemiBold">{item.payment.description ?? 'Cobrança'}</ThemedText>
-                  <ThemedText style={styles.muted}>
-                    {formatBRL(item.payment.amount)} · vencimento {item.payment.dueDate}
-                  </ThemedText>
-                  <ThemedText style={styles.muted}>
-                    {enrollment ? `Vínculo: ${enrollment.classId}` : 'Sem vínculo de matrícula'}
-                  </ThemedText>
+                <View style={styles.balanceHeader}>
+                  <View style={styles.balanceText}>
+                    <ThemedText type="defaultSemiBold">{item.payment.description ?? 'Cobrança'}</ThemedText>
+                    <ThemedText style={styles.muted}>
+                      {formatBRL(item.payment.amount)} · vencimento {item.payment.dueDate}
+                    </ThemedText>
+                    <ThemedText style={styles.muted}>
+                      {enrollment ? `Turma: ${enrollment.classId}` : 'Sem vínculo de matrícula'}
+                    </ThemedText>
+                    <ThemedText style={styles.muted}>
+                      {`Aluno: ${studentName}${item.email ? ` • ${item.email}` : ''}`}
+                    </ThemedText>
+                  </View>
+                  <ThemedView
+                    style={[
+                      styles.badge,
+                      item.status === 'pending' && styles.badgePending,
+                      item.status === 'overdue' && styles.badgeOverdue,
+                      item.status === 'failed' && styles.badgeFailed,
+                    ]}>
+                    <ThemedText type="defaultSemiBold" style={styles.badgeText}>
+                      {item.status === 'pending'
+                        ? 'Pendente'
+                        : item.status === 'overdue'
+                          ? 'Em atraso'
+                          : 'Falhou'}
+                    </ThemedText>
+                  </ThemedView>
                 </View>
-                <ThemedView
-                  style={[
-                    styles.badge,
-                    item.status === 'pending' && styles.badgePending,
-                    item.status === 'overdue' && styles.badgeOverdue,
-                    item.status === 'failed' && styles.badgeFailed,
-                  ]}>
-                  <ThemedText type="defaultSemiBold" style={styles.badgeText}>
-                    {item.status === 'pending'
-                      ? 'Pendente'
-                      : item.status === 'overdue'
-                        ? 'Em atraso'
-                        : 'Falhou'}
-                  </ThemedText>
-                </ThemedView>
+
                 <View style={styles.actionColumn}>
                   <Pressable
                     style={styles.linkButton}
@@ -229,8 +236,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     gap: 12,
   },
+  balanceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
   balanceText: {
     gap: 4,
+    flex: 1,
   },
   badge: {
     alignSelf: 'flex-start',
@@ -251,10 +265,11 @@ const styles = StyleSheet.create({
     color: '#1b1b1b',
   },
   actionColumn: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     gap: 8,
+    marginTop: 4,
+    alignSelf: 'stretch',
   },
   linkButton: {
     paddingVertical: 8,

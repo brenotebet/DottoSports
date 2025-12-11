@@ -19,7 +19,7 @@ export default function MenuScreen() {
   const insets = useSafeAreaInsets();
   const { hasRole } = useAuth();
 
-  const showPaymentTile = false;
+  const showPaymentTile = true;
   const visibleActions = showPaymentTile
     ? actions
     : actions.filter((item) => item.title !== 'Realizar pagamento');

@@ -60,6 +60,7 @@ type InstructorDataContextValue = {
     payment: Payment;
     invoice?: Invoice;
     student?: StudentProfile;
+    email?: string;
     status: 'pending' | 'overdue' | 'failed';
   }[];
   cardOnFile: CardOnFile;
@@ -237,9 +238,46 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       };
 
       setEnrollments((prev) => [...prev, enrollment]);
+
+      const hasExistingPayment = payments.some((payment) => payment.enrollmentId === enrollment.id);
+      if (!hasExistingPayment) {
+        const dueDate = new Date(now);
+        dueDate.setDate(dueDate.getDate() + 3);
+
+        const amount = 120;
+        const description = classInfo
+          ? `Mensalidade - ${classInfo.title}`
+          : 'Mensalidade da turma inscrita';
+
+        const payment: Payment = {
+          id: generateId('payment'),
+          studentId,
+          enrollmentId: enrollment.id,
+          amount,
+          currency: 'BRL',
+          method: 'credit_card',
+          status: 'pending',
+          dueDate: dueDate.toISOString().slice(0, 10),
+          description,
+        };
+
+        const invoice: Invoice = {
+          id: generateId('invoice'),
+          paymentId: payment.id,
+          enrollmentId: enrollment.id,
+          issueDate: now.slice(0, 10),
+          reference: `${description} - ${dueDate.getMonth() + 1}/${dueDate.getFullYear()}`,
+          total: amount,
+          currency: 'BRL',
+          status: 'open',
+        };
+
+        setPayments((prev) => [payment, ...prev]);
+        setInvoices((prev) => [invoice, ...prev]);
+      }
       return { enrollment, isWaitlist, alreadyEnrolled: false };
     },
-    [classes, enrollments],
+    [classes, enrollments, payments],
   );
 
   const getCapacityUsage = useCallback(
@@ -283,11 +321,13 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         .map((payment) => {
           const invoice = invoices.find((item) => item.paymentId === payment.id);
           const student = students.find((item) => item.id === payment.studentId);
+          const email = seedAccounts.find((account) => account.id === student?.userId)?.email;
           const isOverdue = new Date(payment.dueDate) < new Date();
           return {
             payment,
             invoice,
             student,
+            email,
             status: payment.status === 'failed' ? 'failed' : isOverdue ? 'overdue' : 'pending',
           } as const;
         }),

@@ -46,7 +46,7 @@ export default function DashboardScreen() {
   const nextPayment = useMemo(() => {
     if (!studentId) return null;
     return payments
-      .filter((payment) => payment.studentId === studentId)
+      .filter((payment) => payment.studentId === studentId && payment.status !== 'paid')
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
   }, [payments, studentId]);
 
