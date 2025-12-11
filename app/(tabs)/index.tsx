@@ -46,7 +46,7 @@ export default function DashboardScreen() {
   const nextPayment = useMemo(() => {
     if (!studentId) return null;
     return payments
-      .filter((payment) => payment.studentId === studentId)
+      .filter((payment) => payment.studentId === studentId && payment.status !== 'paid')
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
   }, [payments, studentId]);
 
@@ -72,10 +72,17 @@ export default function DashboardScreen() {
       {
         text: 'Sim',
         onPress: () => {
-          recordCheckIn(upcomingSession.id, enrollment.id, 'manual');
-          const message = 'Presença registrada para a próxima sessão.';
-          setCheckInStatus(message);
-          Alert.alert('Check-in concluído', message);
+          try {
+            recordCheckIn(upcomingSession.id, enrollment.id, 'manual');
+            const message = 'Presença registrada para a próxima sessão.';
+            setCheckInStatus(message);
+            Alert.alert('Check-in concluído', message);
+          } catch (error) {
+            const fallback = 'Não foi possível registrar o check-in.';
+            const message = error instanceof Error ? error.message : fallback;
+            setCheckInStatus(message);
+            Alert.alert('Pagamento requerido', message);
+          }
         },
       },
     ]);
