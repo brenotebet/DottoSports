@@ -6,6 +6,10 @@ import type {
   InstructorProfile,
   Invoice,
   Payment,
+  PaymentIntent,
+  PaymentSession,
+  Receipt,
+  Settlement,
   StudentProfile,
   TrainingClass,
   UserAccount,
@@ -169,12 +173,14 @@ export const payments: Payment[] = [
   {
     id: 'payment-1',
     studentId: 'student-1',
+    enrollmentId: 'enrollment-1',
     amount: 95,
     currency: 'BRL',
     method: 'pix',
     status: 'pending',
     dueDate: '2024-12-15',
     description: 'Mensalidade dezembro',
+    invoiceId: 'invoice-1',
   },
 ];
 
@@ -182,9 +188,60 @@ export const invoices: Invoice[] = [
   {
     id: 'invoice-1',
     paymentId: 'payment-1',
+    enrollmentId: 'enrollment-1',
     issueDate: '2024-12-10',
     reference: 'DEC/2024-MENSALIDADE',
+    total: 95,
+    currency: 'BRL',
+    status: 'open',
     notes: 'Gerado automaticamente para cobrança mensal.',
+  },
+];
+
+export const paymentIntents: PaymentIntent[] = [
+  {
+    id: 'pi-1',
+    paymentId: 'payment-1',
+    enrollmentId: 'enrollment-1',
+    amount: 95,
+    currency: 'BRL',
+    paymentMethod: 'pix',
+    status: 'processing',
+    clientSecret: 'secret-pi-1',
+  },
+];
+
+export const paymentSessions: PaymentSession[] = [
+  {
+    id: 'ps-1',
+    intentId: 'pi-1',
+    status: 'open',
+    checkoutUrl: 'https://pagamentos.dottosports.test/ps-1',
+    createdAt: '2024-12-10T12:00:00Z',
+    expiresAt: '2024-12-15T23:59:59Z',
+  },
+];
+
+export const receipts: Receipt[] = [
+  {
+    id: 'receipt-1',
+    paymentId: 'payment-1',
+    enrollmentId: 'enrollment-1',
+    issuedAt: '2024-12-11T18:30:00Z',
+    downloadUrl: 'https://pagamentos.dottosports.test/recibos/receipt-1.pdf',
+    reference: 'REC-DEC-2024-0001',
+  },
+];
+
+export const settlements: Settlement[] = [
+  {
+    id: 'settlement-1',
+    period: '2024-12-01 a 2024-12-15',
+    gross: 95,
+    fees: 4.75,
+    net: 90.25,
+    depositedAt: '2024-12-16T09:00:00Z',
+    receiptIds: ['receipt-1'],
   },
 ];
 
@@ -198,6 +255,10 @@ export const seededDatabase: DatabaseSchema = {
   attendance,
   payments,
   invoices,
+  receipts,
+  paymentIntents,
+  paymentSessions,
+  settlements,
 };
 
 export const resolveSeedRole = (email: string): UserRole | null => {

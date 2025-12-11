@@ -28,6 +28,7 @@ export default function MenuScreen() {
     ? [
         { title: 'Painel do instrutor', href: '/instructor/dashboard' as const },
         { title: 'Aulas e sessões', href: '/instructor/classes' as const },
+        { title: 'Cobranças e pagamentos', href: '/instructor/payments' as const },
       ]
     : [];
 

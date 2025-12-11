@@ -4,7 +4,12 @@ import type {
   Attendance,
   ClassSession,
   Enrollment,
+  Invoice,
   Payment,
+  PaymentIntent,
+  PaymentSession,
+  Receipt,
+  Settlement,
   StudentProfile,
   TrainingClass,
 } from '@/constants/schema';
@@ -13,6 +18,11 @@ import {
   classes as seedClasses,
   enrollments as seedEnrollments,
   payments as seedPayments,
+  invoices as seedInvoices,
+  paymentIntents as seedPaymentIntents,
+  paymentSessions as seedPaymentSessions,
+  receipts as seedReceipts,
+  settlements as seedSettlements,
   sessions as seedSessions,
   studentProfiles,
   seedAccounts,
@@ -41,6 +51,17 @@ type InstructorDataContextValue = {
   attendance: Attendance[];
   students: StudentProfile[];
   payments: Payment[];
+  invoices: Invoice[];
+  paymentIntents: PaymentIntent[];
+  paymentSessions: PaymentSession[];
+  receipts: Receipt[];
+  settlements: Settlement[];
+  outstandingBalances: {
+    payment: Payment;
+    invoice?: Invoice;
+    student?: StudentProfile;
+    status: 'pending' | 'overdue' | 'failed';
+  }[];
   cardOnFile: CardOnFile;
   rosterByClass: Record<string, RosterEntry[]>;
   createClass: (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => void;
@@ -71,6 +92,18 @@ type InstructorDataContextValue = {
   ) => Payment;
   updateCardOnFile: (payload: Partial<CardOnFile>) => void;
   updateEnrollmentStatus: (enrollmentId: string, status: Enrollment['status']) => void;
+  createPaymentIntentForEnrollment: (
+    enrollmentId: string,
+    amount: number,
+    method: Payment['method'],
+    description: string,
+  ) => PaymentIntent;
+  startPaymentSession: (intentId: string, fallbackIntent?: PaymentIntent) => PaymentSession;
+  processPaymentWebhook: (
+    sessionId: string,
+    result: 'succeeded' | 'failed',
+    failureReason?: string,
+  ) => void;
 };
 
 const InstructorDataContext = createContext<InstructorDataContextValue | undefined>(undefined);
@@ -79,14 +112,24 @@ const generateId = (prefix: string) => `${prefix}-${Date.now()}-${Math.round(Mat
 const findAccountByEmail = (email: string) =>
   seedAccounts.find((account) => account.email.toLowerCase() === email.toLowerCase());
 
-const resolvePaymentStatus = (payments: Payment[], studentId: string) => {
-  const relevantPayment = payments.find((payment) => payment.studentId === studentId);
+const resolvePaymentStatus = (
+  payments: Payment[],
+  invoices: Invoice[],
+  enrollmentId: string,
+) => {
+  const relevantPayment = payments.find((payment) => payment.enrollmentId === enrollmentId);
+
   if (!relevantPayment) {
     return { paymentStatus: 'paid' as const, paymentLabel: 'Sem cobranças ativas' };
   }
 
-  if (relevantPayment.status === 'paid') {
+  const relatedInvoice = invoices.find((invoice) => invoice.paymentId === relevantPayment.id);
+  if (relevantPayment.status === 'paid' || relatedInvoice?.status === 'paid') {
     return { paymentStatus: 'paid' as const, paymentLabel: 'Pago' };
+  }
+
+  if (relevantPayment.status === 'failed') {
+    return { paymentStatus: 'overdue' as const, paymentLabel: 'Falha no pagamento' };
   }
 
   const isOverdue = new Date(relevantPayment.dueDate) < new Date();
@@ -110,6 +153,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [enrollments, setEnrollments] = useState<Enrollment[]>(seedEnrollments);
   const [attendance, setAttendance] = useState<Attendance[]>(seedAttendance);
   const [payments, setPayments] = useState<Payment[]>(seedPayments);
+  const [invoices, setInvoices] = useState<Invoice[]>(seedInvoices);
+  const [paymentIntents, setPaymentIntents] = useState<PaymentIntent[]>(seedPaymentIntents);
+  const [paymentSessions, setPaymentSessions] = useState<PaymentSession[]>(seedPaymentSessions);
+  const [receipts, setReceipts] = useState<Receipt[]>(seedReceipts);
+  const [settlements, setSettlements] = useState<Settlement[]>(seedSettlements);
   const [students, setStudents] = useState<StudentProfile[]>(studentProfiles);
   const [cardOnFile, setCardOnFile] = useState<CardOnFile>(defaultCard);
 
@@ -214,7 +262,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const existingAttendance = attendance.find(
         (entry) => entry.enrollmentId === enrollment.id,
       );
-      const paymentInfo = resolvePaymentStatus(payments, enrollment.studentId);
+      const paymentInfo = resolvePaymentStatus(payments, invoices, enrollment.id);
 
       const entry: RosterEntry = {
         enrollment,
@@ -226,7 +274,25 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       acc[enrollment.classId] = [...(acc[enrollment.classId] ?? []), entry];
       return acc;
     }, {});
-  }, [attendance, enrollments, payments, students]);
+  }, [attendance, enrollments, invoices, payments, students]);
+
+  const outstandingBalances = useMemo(
+    () =>
+      payments
+        .filter((payment) => payment.status !== 'paid')
+        .map((payment) => {
+          const invoice = invoices.find((item) => item.paymentId === payment.id);
+          const student = students.find((item) => item.id === payment.studentId);
+          const isOverdue = new Date(payment.dueDate) < new Date();
+          return {
+            payment,
+            invoice,
+            student,
+            status: payment.status === 'failed' ? 'failed' : isOverdue ? 'overdue' : 'pending',
+          } as const;
+        }),
+    [invoices, payments, students],
+  );
 
   const createClass = (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
@@ -303,6 +369,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const recordCheckIn = useCallback(
     (sessionId: string, enrollmentId: string, method: 'qr' | 'manual') => {
+      const paymentGate = resolvePaymentStatus(payments, invoices, enrollmentId);
+      if (paymentGate.paymentStatus !== 'paid') {
+        throw new Error('Pagamento pendente ou em atraso impede o check-in.');
+      }
+
       const note = method === 'qr' ? 'Check-in via QR Code' : 'Check-in manual';
       let created: Attendance | undefined;
 
@@ -342,7 +413,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       return created;
     },
-    [],
+    [invoices, payments],
   );
 
   const updateEnrollmentStatus = (enrollmentId: string, status: Enrollment['status']) => {
@@ -393,6 +464,164 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const createPaymentIntentForEnrollment = useCallback(
+    (enrollmentId: string, amount: number, method: Payment['method'], description: string) => {
+      const enrollment = enrollments.find((item) => item.id === enrollmentId);
+      const now = new Date();
+      const studentId = enrollment?.studentId ?? 'student-unknown';
+
+      const payment: Payment = {
+        id: generateId('payment'),
+        studentId,
+        enrollmentId,
+        amount,
+        currency: 'BRL',
+        method,
+        status: 'pending',
+        dueDate: now.toISOString().slice(0, 10),
+        description,
+      };
+
+      const invoice: Invoice = {
+        id: generateId('invoice'),
+        paymentId: payment.id,
+        enrollmentId,
+        issueDate: now.toISOString().slice(0, 10),
+        reference: `${description} - ${now.getMonth() + 1}/${now.getFullYear()}`,
+        total: amount,
+        currency: 'BRL',
+        status: 'open',
+      };
+
+      const intent: PaymentIntent = {
+        id: generateId('pi'),
+        paymentId: payment.id,
+        enrollmentId,
+        amount,
+        currency: 'BRL',
+        paymentMethod: method,
+        status: 'requires_payment_method',
+        clientSecret: `secret_${payment.id}`,
+      };
+
+      setPayments((prev) => [payment, ...prev]);
+      setInvoices((prev) => [invoice, ...prev]);
+      setPaymentIntents((prev) => [intent, ...prev]);
+
+      return intent;
+    },
+    [enrollments],
+  );
+
+  const startPaymentSession = useCallback(
+    (intentId: string, fallbackIntent?: PaymentIntent) => {
+      const intent = paymentIntents.find((item) => item.id === intentId) ?? fallbackIntent;
+      if (!intent) {
+        throw new Error('Intent de pagamento não encontrada.');
+      }
+
+      const now = new Date();
+      const session: PaymentSession = {
+        id: generateId('ps'),
+        intentId,
+        status: 'open',
+        checkoutUrl: `https://pagamentos.dottosports.test/${intentId}`,
+        createdAt: now.toISOString(),
+        expiresAt: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
+      };
+
+      setPaymentIntents((prev) =>
+        prev.map((item) => (item.id === intentId ? { ...item, status: 'processing' } : item)),
+      );
+      setPaymentSessions((prev) => [session, ...prev]);
+
+      return session;
+    },
+    [paymentIntents],
+  );
+
+  const processPaymentWebhook = useCallback(
+    (sessionId: string, result: 'succeeded' | 'failed', failureReason?: string) => {
+      const session = paymentSessions.find((item) => item.id === sessionId);
+      if (!session) return;
+
+      const intent = paymentIntents.find((item) => item.id === session.intentId);
+      if (!intent) return;
+
+      const nowIso = new Date().toISOString();
+      const fees = intent.amount * 0.05;
+      const paymentId = intent.paymentId;
+
+      setPaymentSessions((prev) =>
+        prev.map((item) =>
+          item.id === sessionId
+            ? { ...item, status: 'completed', lastWebhookStatus: result, failureReason }
+            : item,
+        ),
+      );
+
+      if (result === 'succeeded') {
+        const receipt: Receipt = {
+          id: generateId('receipt'),
+          paymentId,
+          enrollmentId: intent.enrollmentId,
+          issuedAt: nowIso,
+          downloadUrl: `https://pagamentos.dottosports.test/recibos/${paymentId}.pdf`,
+          reference: `REC-${paymentId}`,
+        };
+
+        const settlement: Settlement = {
+          id: generateId('settlement'),
+          period: nowIso.slice(0, 10),
+          gross: intent.amount,
+          fees,
+          net: intent.amount - fees,
+          depositedAt: nowIso,
+          receiptIds: [receipt.id],
+        };
+
+        setPaymentIntents((prev) =>
+          prev.map((item) => (item.id === intent.id ? { ...item, status: 'succeeded' } : item)),
+        );
+        setPayments((prev) =>
+          prev.map((payment) =>
+            payment.id === paymentId
+              ? { ...payment, status: 'paid', paidAt: nowIso, receiptId: receipt.id }
+              : payment,
+          ),
+        );
+        setInvoices((prev) =>
+          prev.map((invoice) =>
+            invoice.paymentId === paymentId ? { ...invoice, status: 'paid' } : invoice,
+          ),
+        );
+        setReceipts((prev) => [receipt, ...prev]);
+        setSettlements((prev) => [settlement, ...prev]);
+      } else {
+        setPaymentIntents((prev) =>
+          prev.map((item) =>
+            item.id === intent.id ? { ...item, status: 'failed', paymentMethod: intent.paymentMethod } : item,
+          ),
+        );
+        setPayments((prev) =>
+          prev.map((payment) =>
+            payment.id === paymentId
+              ? { ...payment, status: 'failed', description: failureReason ?? payment.description }
+              : payment,
+          ),
+        );
+        setInvoices((prev) =>
+          prev.map((invoice) =>
+            invoice.paymentId === paymentId
+              ? { ...invoice, status: 'open', notes: failureReason ?? invoice.notes }
+              : invoice,
+          ),
+        );
+      }
+    },
+    [paymentIntents, paymentSessions],
+  );
+
   const updateCardOnFile = useCallback((payload: Partial<CardOnFile>) => {
     setCardOnFile((prev) => ({ ...prev, ...payload }));
   }, []);
@@ -405,6 +634,12 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       attendance,
       students,
       payments,
+      invoices,
+      paymentIntents,
+      paymentSessions,
+      receipts,
+      settlements,
+      outstandingBalances,
       cardOnFile,
       rosterByClass,
       createClass,
@@ -421,6 +656,9 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       recordCheckIn,
       chargeStoredCard,
       createOneTimePayment,
+      createPaymentIntentForEnrollment,
+      startPaymentSession,
+      processPaymentWebhook,
       updateCardOnFile,
       updateEnrollmentStatus,
     }),
@@ -431,6 +669,12 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       attendance,
       students,
       payments,
+      invoices,
+      paymentIntents,
+      paymentSessions,
+      receipts,
+      settlements,
+      outstandingBalances,
       cardOnFile,
       rosterByClass,
       ensureStudentProfile,
@@ -440,6 +684,9 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       recordCheckIn,
       chargeStoredCard,
       createOneTimePayment,
+      createPaymentIntentForEnrollment,
+      startPaymentSession,
+      processPaymentWebhook,
       updateCardOnFile,
       updateEnrollmentStatus,
     ],
