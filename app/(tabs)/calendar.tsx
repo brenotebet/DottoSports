@@ -6,71 +6,167 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useRoleGuard } from '@/hooks/use-role-guard';
+import { useInstructorData } from '@/providers/instructor-data-provider';
 
-const schedule = {
-  'Seg 11': [
-    { time: '06:00', title: 'Força Base', coach: 'Coach Liza' },
-    { time: '19:30', title: 'Engine Builder', coach: 'Coach Ken' },
-  ],
-  'Ter 12': [
-    { time: '06:30', title: 'Habilidades de Ginástica', coach: 'Coach Emi' },
-    { time: '18:00', title: 'Metcon Intensivo', coach: 'Coach Quinn' },
-  ],
-  'Qua 13': [
-    { time: '12:00', title: 'Levantamento Pesado', coach: 'Coach Sam' },
-    { time: '18:30', title: 'Treino em Dupla', coach: 'Coach Rosa' },
-  ],
-  'Qui 14': [
-    { time: '05:45', title: 'Condicionamento', coach: 'Coach Leo' },
-    { time: '18:15', title: 'Levantamento Olímpico', coach: 'Coach Sky' },
-  ],
-  'Sex 15': [
-    { time: '06:00', title: 'Sprints e Intervalos', coach: 'Coach Nate' },
-    { time: '17:30', title: 'Open Box', coach: 'Supervisor de plantão' },
-  ],
-};
+const weekDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+const monthNames = [
+  'janeiro',
+  'fevereiro',
+  'março',
+  'abril',
+  'maio',
+  'junho',
+  'julho',
+  'agosto',
+  'setembro',
+  'outubro',
+  'novembro',
+  'dezembro',
+];
+
+const dateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 export default function CalendarScreen() {
   useRoleGuard(['ADMIN', 'INSTRUCTOR']);
 
-  const days = useMemo(() => Object.keys(schedule) as (keyof typeof schedule)[], []);
-  const [selectedDay, setSelectedDay] = useState<keyof typeof schedule>(days[0]);
-  const dayClasses = schedule[selectedDay];
   const insets = useSafeAreaInsets();
+  const { sessions, classes } = useInstructorData();
+
+  const firstSessionDate = useMemo(() => {
+    if (sessions.length === 0) return new Date();
+    const sorted = [...sessions].sort(
+      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+    );
+    return new Date(sorted[0].startTime);
+  }, [sessions]);
+
+  const [currentMonth, setCurrentMonth] = useState(
+    new Date(firstSessionDate.getFullYear(), firstSessionDate.getMonth(), 1),
+  );
+  const [selectedDate, setSelectedDate] = useState(firstSessionDate);
+
+  const sessionsByDay = useMemo(() => {
+    const map: Record<string, Array<{ classTitle: string; location: string; time: string }>> = {};
+    sessions.forEach((session) => {
+      const sessionDate = new Date(session.startTime);
+      const key = dateKey(sessionDate);
+      const sessionClass = classes.find((item) => item.id === session.classId);
+      const time = sessionDate.toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      if (!map[key]) {
+        map[key] = [];
+      }
+      map[key].push({
+        classTitle: sessionClass?.title ?? 'Aula',
+        location: session.location,
+        time,
+      });
+    });
+    return map;
+  }, [classes, sessions]);
+
+  const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
+  const startOffset = (currentMonth.getDay() + 6) % 7; // segunda como início
+  const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+
+  const calendarCells = useMemo(() => {
+    return Array.from({ length: totalCells }).map((_, index) => {
+      const dayNumber = index - startOffset + 1;
+      if (dayNumber < 1 || dayNumber > daysInMonth) {
+        return null;
+      }
+      return new Date(currentMonth.getFullYear(), currentMonth.getMonth(), dayNumber);
+    });
+  }, [currentMonth, daysInMonth, startOffset, totalCells]);
+
+  const selectedKey = dateKey(selectedDate);
+  const classesForDay = sessionsByDay[selectedKey] ?? [];
+
+  const handleMonthChange = (offset: number) => {
+    const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
+    setCurrentMonth(next);
+    setSelectedDate(new Date(next.getFullYear(), next.getMonth(), 1));
+  };
+
+  const renderDayCell = (cellDate: Date | null, index: number) => {
+    if (!cellDate) {
+      return <View key={`empty-${index}`} style={[styles.dayCell, styles.dayCellEmpty]} />;
+    }
+
+    const key = dateKey(cellDate);
+    const hasSessions = Boolean(sessionsByDay[key]?.length);
+    const isSelected = key === selectedKey;
+
+    return (
+      <Pressable
+        key={key}
+        style={[styles.dayCell, isSelected && styles.dayCellSelected]}
+        onPress={() => setSelectedDate(cellDate)}>
+        <ThemedText type="defaultSemiBold" style={isSelected && styles.selectedText}>
+          {cellDate.getDate()}
+        </ThemedText>
+        {hasSessions && <View style={[styles.dot, isSelected && styles.dotSelected]} />}
+      </Pressable>
+    );
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
-          Calendário de aulas
+          Calendário mensal
+        </ThemedText>
+        <ThemedText style={styles.muted}>
+          Visualize o mês inteiro e toque em um dia com aulas para ver os horários disponíveis.
         </ThemedText>
 
-        <View style={styles.dayRow}>
-          {days.map((day) => {
-            const isActive = selectedDay === day;
-            return (
-              <Pressable
-                key={day}
-                onPress={() => setSelectedDay(day)}
-                style={[styles.dayChip, isActive && styles.dayChipActive]}>
-                <ThemedText type="defaultSemiBold" style={isActive && styles.dayChipTextActive}>
-                  {day}
-                </ThemedText>
-              </Pressable>
-            );
-          })}
-        </View>
+        <ThemedView style={styles.card}>
+          <View style={styles.monthHeader}>
+            <Pressable onPress={() => handleMonthChange(-1)} style={styles.monthButton}>
+              <ThemedText type="defaultSemiBold">‹</ThemedText>
+            </Pressable>
+            <ThemedText type="subtitle" style={styles.monthTitle}>
+              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </ThemedText>
+            <Pressable onPress={() => handleMonthChange(1)} style={styles.monthButton}>
+              <ThemedText type="defaultSemiBold">›</ThemedText>
+            </Pressable>
+          </View>
+
+          <View style={styles.weekRow}>
+            {weekDays.map((day) => (
+              <ThemedText key={day} style={[styles.weekDay, styles.muted]}>
+                {day}
+              </ThemedText>
+            ))}
+          </View>
+
+          <View style={styles.grid}>{calendarCells.map(renderDayCell)}</View>
+        </ThemedView>
 
         <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Agenda de {selectedDay}</ThemedText>
+          <ThemedText type="subtitle">
+            {selectedDate.toLocaleDateString('pt-BR', {
+              weekday: 'long',
+              day: '2-digit',
+              month: 'long',
+            })}
+          </ThemedText>
+          <ThemedText style={styles.muted}>
+            {classesForDay.length > 0
+              ? 'Toque em um dia diferente para ver outras aulas.'
+              : 'Nenhuma aula marcada para este dia.'}
+          </ThemedText>
+
           <View style={styles.scheduleList}>
-            {dayClasses.map((item) => (
-              <ThemedView key={`${item.time}-${item.title}`} style={styles.session}>
+            {classesForDay.map((item, index) => (
+              <ThemedView key={`${selectedKey}-${index}`} style={styles.session}>
                 <View>
-                  <ThemedText type="defaultSemiBold">{item.title}</ThemedText>
-                  <ThemedText style={styles.muted}>{item.coach}</ThemedText>
+                  <ThemedText type="defaultSemiBold">{item.classTitle}</ThemedText>
+                  <ThemedText style={styles.muted}>{item.location}</ThemedText>
                 </View>
                 <ThemedText type="defaultSemiBold">{item.time}</ThemedText>
               </ThemedView>
@@ -95,28 +191,65 @@ const styles = StyleSheet.create({
   heading: {
     marginBottom: 4,
   },
-  dayRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  dayChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#e5f3ff',
-  },
-  dayChipActive: {
-    backgroundColor: '#0e9aed',
-  },
-  dayChipTextActive: {
-    color: '#fff',
-  },
   card: {
     borderRadius: 14,
     padding: 16,
     gap: 12,
     backgroundColor: '#e9f4ff',
+  },
+  monthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  monthButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#d9eefe',
+  },
+  monthTitle: {
+    textTransform: 'capitalize',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  weekDay: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    marginVertical: 2,
+    gap: 6,
+  },
+  dayCellSelected: {
+    backgroundColor: '#0e9aed',
+  },
+  dayCellEmpty: {
+    opacity: 0.4,
+  },
+  selectedText: {
+    color: '#fff',
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#0e9aed',
+  },
+  dotSelected: {
+    backgroundColor: '#fff',
   },
   scheduleList: {
     gap: 12,
