@@ -119,6 +119,30 @@ export default function CalendarScreen() {
         <ThemedText style={styles.muted}>
           Visualize o mês inteiro e toque em um dia com aulas para ver os horários disponíveis.
         </ThemedText>
+        <ThemedText style={styles.muted}>
+          Visualize o mês inteiro e toque em um dia com aulas para ver os horários disponíveis.
+        </ThemedText>
+
+        <ThemedView style={styles.card}>
+          <View style={styles.monthHeader}>
+            <Pressable onPress={() => handleMonthChange(-1)} style={styles.monthButton}>
+              <ThemedText type="defaultSemiBold">‹</ThemedText>
+            </Pressable>
+            <ThemedText type="subtitle" style={styles.monthTitle}>
+              {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            </ThemedText>
+            <Pressable onPress={() => handleMonthChange(1)} style={styles.monthButton}>
+              <ThemedText type="defaultSemiBold">›</ThemedText>
+            </Pressable>
+          </View>
+
+          <View style={styles.weekRow}>
+            {weekDays.map((day) => (
+              <ThemedText key={day} style={[styles.weekDay, styles.muted]}>
+                {day}
+              </ThemedText>
+            ))}
+          </View>
 
         <ThemedView style={styles.card}>
           <View style={styles.monthHeader}>
