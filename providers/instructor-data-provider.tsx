@@ -45,6 +45,23 @@ export type CardOnFile = {
   label: string;
 };
 
+type SystemEvent = {
+  id: string;
+  type: 'enrollment_created' | 'payment_posted' | 'attendance_marked' | 'validation_error';
+  message: string;
+  timestamp: string;
+  context?: Record<string, unknown>;
+};
+
+type AnalyticsSnapshot = {
+  totalRevenue: number;
+  pendingRevenue: number;
+  averageUtilization: number;
+  attendanceRate: number;
+  revenueByStudent: Record<string, number>;
+  utilizationByClass: Record<string, { capacity: number; active: number; utilization: number }>;
+};
+
 type InstructorDataContextValue = {
   classes: TrainingClass[];
   sessions: ClassSession[];
@@ -57,6 +74,8 @@ type InstructorDataContextValue = {
   paymentSessions: PaymentSession[];
   receipts: Receipt[];
   settlements: Settlement[];
+  events: SystemEvent[];
+  analytics: AnalyticsSnapshot;
   outstandingBalances: {
     payment: Payment;
     invoice?: Invoice;
@@ -152,6 +171,8 @@ const defaultCard: CardOnFile = {
   label: 'Visa •••• 4242',
 };
 
+const MAX_EVENT_ENTRIES = 50;
+
 type PersistedInstructorData = {
   classes: TrainingClass[];
   sessions: ClassSession[];
@@ -165,6 +186,7 @@ type PersistedInstructorData = {
   settlements: Settlement[];
   students: StudentProfile[];
   cardOnFile: CardOnFile;
+  events: SystemEvent[];
 };
 
 const instructorStateFile = (() => {
@@ -201,7 +223,20 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [settlements, setSettlements] = useState<Settlement[]>(seedSettlements);
   const [students, setStudents] = useState<StudentProfile[]>(studentProfiles);
   const [cardOnFile, setCardOnFile] = useState<CardOnFile>(defaultCard);
+  const [events, setEvents] = useState<SystemEvent[]>([]);
   const [hydrated, setHydrated] = useState(false);
+
+  const logEvent = useCallback(
+    (type: SystemEvent['type'], message: string, context?: Record<string, unknown>) => {
+      setEvents((prev) =>
+        [{ id: generateId('evt'), type, message, timestamp: new Date().toISOString(), context }, ...prev].slice(
+          0,
+          MAX_EVENT_ENTRIES,
+        ),
+      );
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!instructorStateFile) {
@@ -230,6 +265,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         if (storedData.settlements) setSettlements(storedData.settlements);
         if (storedData.students) setStudents(storedData.students);
         if (storedData.cardOnFile) setCardOnFile(storedData.cardOnFile);
+        if (storedData.events) setEvents(storedData.events);
       } catch (error) {
         console.warn('Não foi possível restaurar os dados do instrutor', error);
       } finally {
@@ -257,6 +293,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         settlements,
         students,
         cardOnFile,
+        events,
       };
 
       instructorStateFile.write(JSON.stringify(payload));
@@ -335,11 +372,21 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       );
 
       if (existing) {
+        logEvent('validation_error', 'Tentativa de inscrição duplicada bloqueada.', {
+          studentId,
+          classId,
+          enrollmentId: existing.id,
+        });
         return { enrollment: existing, isWaitlist: existing.status === 'waitlist', alreadyEnrolled: true };
       }
 
       const now = new Date().toISOString();
       const classInfo = classes.find((item) => item.id === classId);
+      if (!classInfo) {
+        const message = 'Turma não encontrada para inscrição.';
+        logEvent('validation_error', message, { studentId, classId });
+        throw new Error(message);
+      }
       const activeCount = enrollments.filter(
         (item) => item.classId === classId && item.status === 'active',
       ).length;
@@ -355,6 +402,12 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       };
 
       setEnrollments((prev) => [...prev, enrollment]);
+      logEvent('enrollment_created', 'Inscrição criada com validação de capacidade.', {
+        enrollmentId: enrollment.id,
+        classId,
+        studentId,
+        waitlisted: isWaitlist,
+      });
 
       const hasExistingPayment = payments.some((payment) => payment.enrollmentId === enrollment.id);
       if (!hasExistingPayment) {
@@ -391,10 +444,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
         setPayments((prev) => [payment, ...prev]);
         setInvoices((prev) => [invoice, ...prev]);
+        logEvent('payment_posted', 'Cobrança inicial gerada após inscrição.', {
+          paymentId: payment.id,
+          enrollmentId: enrollment.id,
+          status: payment.status,
+          amount,
+        });
       }
       return { enrollment, isWaitlist, alreadyEnrolled: false };
     },
-    [classes, enrollments, payments],
+    [classes, enrollments, logEvent, payments],
   );
 
   const getCapacityUsage = useCallback(
@@ -450,6 +509,47 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         }),
     [invoices, payments, students],
   );
+
+  const analytics = useMemo<AnalyticsSnapshot>(() => {
+    const totalRevenue = payments
+      .filter((payment) => payment.status === 'paid')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+    const pendingRevenue = payments
+      .filter((payment) => payment.status !== 'paid')
+      .reduce((sum, payment) => sum + payment.amount, 0);
+
+    const utilizationByClass = classes.reduce<AnalyticsSnapshot['utilizationByClass']>((acc, trainingClass) => {
+      const active = enrollments.filter(
+        (enrollment) => enrollment.classId === trainingClass.id && enrollment.status === 'active',
+      ).length;
+      const utilization = trainingClass.capacity ? active / trainingClass.capacity : 0;
+
+      acc[trainingClass.id] = {
+        capacity: trainingClass.capacity,
+        active,
+        utilization,
+      };
+      return acc;
+    }, {});
+
+    const averageUtilization =
+      classes.length > 0
+        ? Object.values(utilizationByClass).reduce((sum, entry) => sum + entry.utilization, 0) /
+          classes.length
+        : 0;
+
+    const presentCount = attendance.filter((item) => item.status === 'present').length;
+    const attendanceRate = attendance.length ? presentCount / attendance.length : 0;
+
+    const revenueByStudent = payments.reduce<Record<string, number>>((acc, payment) => {
+      if (payment.status === 'paid') {
+        acc[payment.studentId] = (acc[payment.studentId] ?? 0) + payment.amount;
+      }
+      return acc;
+    }, {});
+
+    return { totalRevenue, pendingRevenue, averageUtilization, attendanceRate, revenueByStudent, utilizationByClass };
+  }, [attendance, classes, enrollments, payments]);
 
   const createClass = (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
@@ -522,13 +622,43 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         },
       ];
     });
+    logEvent('attendance_marked', 'Status de presença atualizado manualmente.', {
+      sessionId,
+      enrollmentId,
+      status,
+    });
   };
 
   const recordCheckIn = useCallback(
     (sessionId: string, enrollmentId: string, method: 'qr' | 'manual') => {
+      if (!sessions.some((item) => item.id === sessionId)) {
+        const message = 'Sessão não encontrada para check-in.';
+        logEvent('validation_error', message, { sessionId, enrollmentId });
+        throw new Error(message);
+      }
+
+      const enrollment = enrollments.find((item) => item.id === enrollmentId);
+      if (!enrollment) {
+        const message = 'Matrícula não encontrada. Conclua a inscrição antes do check-in.';
+        logEvent('validation_error', message, { sessionId, enrollmentId });
+        throw new Error(message);
+      }
+
+      if (enrollment.status === 'waitlist') {
+        const message = 'Inscrições em lista de espera não permitem check-in.';
+        logEvent('validation_error', message, { sessionId, enrollmentId });
+        throw new Error(message);
+      }
+
       const paymentGate = resolvePaymentStatus(payments, invoices, enrollmentId);
       if (paymentGate.paymentStatus !== 'paid') {
-        throw new Error('Pagamento pendente ou em atraso impede o check-in.');
+        const message = 'Pagamento pendente ou em atraso impede o check-in.';
+        logEvent('validation_error', message, {
+          sessionId,
+          enrollmentId,
+          paymentStatus: paymentGate.paymentStatus,
+        });
+        throw new Error(message);
       }
 
       const note = method === 'qr' ? 'Check-in via QR Code' : 'Check-in manual';
@@ -568,9 +698,14 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         setAttendance((prev) => [...prev, created!]);
       }
 
+      logEvent('attendance_marked', 'Check-in registrado após validação de pagamento.', {
+        sessionId,
+        enrollmentId,
+        method,
+      });
       return created;
     },
-    [invoices, payments],
+    [enrollments, invoices, logEvent, payments, sessions],
   );
 
   const updateEnrollmentStatus = (enrollmentId: string, status: Enrollment['status']) => {
@@ -595,9 +730,15 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       };
 
       setPayments((prev) => [payment, ...prev]);
+      logEvent('payment_posted', 'Pagamento lançado no cartão em arquivo.', {
+        paymentId: payment.id,
+        studentId,
+        amount,
+        status: payment.status,
+      });
       return payment;
     },
-    [],
+    [logEvent],
   );
 
   const createOneTimePayment = useCallback(
@@ -616,9 +757,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       };
 
       setPayments((prev) => [payment, ...prev]);
+      logEvent('payment_posted', 'Pagamento avulso registrado.', {
+        paymentId: payment.id,
+        studentId,
+        amount,
+        status: payment.status,
+        method: payment.method,
+      });
       return payment;
     },
-    [],
+    [logEvent],
   );
 
   const createPaymentIntentForEnrollment = useCallback(
@@ -664,10 +812,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       setPayments((prev) => [payment, ...prev]);
       setInvoices((prev) => [invoice, ...prev]);
       setPaymentIntents((prev) => [intent, ...prev]);
+      logEvent('payment_posted', 'Intent de pagamento criada para matrícula.', {
+        paymentId: payment.id,
+        enrollmentId,
+        status: payment.status,
+        amount,
+      });
 
       return intent;
     },
-    [enrollments],
+    [enrollments, logEvent],
   );
 
   const startPaymentSession = useCallback(
@@ -760,6 +914,14 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         );
         setReceipts((prev) => [receipt, ...prev]);
         setSettlements((prev) => [settlement, ...prev]);
+        logEvent('payment_posted', 'Pagamento confirmado e conciliado.', {
+          paymentId,
+          intentId: intent.id,
+          sessionId,
+          status: 'paid',
+          amount: intent.amount,
+          receiptId: receipt.id,
+        });
       } else {
         setPaymentIntents((prev) =>
           prev.map((item) =>
@@ -780,9 +942,17 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
               : invoice,
           ),
         );
+        logEvent('payment_posted', 'Pagamento marcado como falho após webhook.', {
+          paymentId,
+          intentId: intent.id,
+          sessionId,
+          status: 'failed',
+          amount: intent.amount,
+          failureReason,
+        });
       }
     },
-    [paymentIntents, paymentSessions],
+    [logEvent, paymentIntents, paymentSessions],
   );
 
   const payOutstandingPayment = useCallback(
@@ -841,6 +1011,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       paymentSessions,
       receipts,
       settlements,
+      events,
+      analytics,
       outstandingBalances,
       cardOnFile,
       rosterByClass,
@@ -877,6 +1049,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       paymentSessions,
       receipts,
       settlements,
+      events,
+      analytics,
       outstandingBalances,
       cardOnFile,
       rosterByClass,
