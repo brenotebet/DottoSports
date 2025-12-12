@@ -83,9 +83,9 @@ export default function MenuScreen() {
           </View>
         </ThemedView>
 
-        {instructorActions.length > 0 && (
-          <ThemedView style={styles.card}>
-            <ThemedText type="subtitle">Área do instrutor</ThemedText>
+        <ThemedView style={styles.card}>
+          <ThemedText type="subtitle">Área do instrutor</ThemedText>
+          {instructorActions.length > 0 ? (
             <View style={styles.list}>
               {instructorActions.map((item) => (
                 <Link key={item.title} href={item.href} asChild>
@@ -96,8 +96,12 @@ export default function MenuScreen() {
                 </Link>
               ))}
             </View>
-          </ThemedView>
-        )}
+          ) : (
+            <ThemedText style={styles.muted}>
+              Visível apenas para perfis de instrutor ou administrador. Entre com uma conta autorizada.
+            </ThemedText>
+          )}
+        </ThemedView>
 
         <View style={styles.footerSpacer} />
         <Pressable onPress={handleLogout} style={styles.logoutButton}>

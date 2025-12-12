@@ -75,6 +75,8 @@ export default function InstructorClassesScreen() {
   });
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [classErrors, setClassErrors] = useState<Partial<Record<keyof ClassFormState, string>>>({});
+  const [sessionErrors, setSessionErrors] = useState<Partial<Record<keyof SessionFormState, string>>>({});
 
   useEffect(() => {
     if (!sessionForm.classId && classes[0]) {
@@ -94,9 +96,39 @@ export default function InstructorClassesScreen() {
     ]);
   };
 
+  const validateClassForm = () => {
+    const errors: Partial<Record<keyof ClassFormState, string>> = {};
+
+    if (!classForm.title.trim()) {
+      errors.title = 'Informe um título para a aula.';
+    }
+
+    if (!classForm.capacity.trim()) {
+      errors.capacity = 'Capacidade é obrigatória.';
+    } else if (Number.isNaN(Number(classForm.capacity)) || Number(classForm.capacity) <= 0) {
+      errors.capacity = 'Use um número maior que zero.';
+    }
+
+    if (!classForm.scheduleDay.trim()) {
+      errors.scheduleDay = 'Defina o dia do cronograma.';
+    }
+
+    if (!classForm.scheduleStart.trim() || !classForm.scheduleEnd.trim()) {
+      errors.scheduleStart = 'Horários de início e fim são obrigatórios.';
+    }
+
+    if (!classForm.scheduleLocation.trim()) {
+      errors.scheduleLocation = 'Defina um local para a aula.';
+    }
+
+    setClassErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmitClass = () => {
-    if (!classForm.title || !classForm.capacity) {
-      Alert.alert('Campos obrigatórios', 'Preencha título e capacidade para salvar a aula.');
+    const isValid = validateClassForm();
+    if (!isValid) {
+      Alert.alert('Revise os campos', 'Corrija os destaques antes de salvar a aula.');
       return;
     }
 
@@ -134,6 +166,7 @@ export default function InstructorClassesScreen() {
       }
 
       setClassForm(defaultClassForm);
+      setClassErrors({});
       setEditingClassId(null);
     });
   };
@@ -148,32 +181,61 @@ export default function InstructorClassesScreen() {
       level: target.level,
       category: target.category,
       capacity: String(target.capacity),
-        scheduleDay: target.schedule[0]?.day ?? 'Seg',
+      scheduleDay: target.schedule[0]?.day ?? 'Seg',
       scheduleStart: target.schedule[0]?.start ?? '07:00',
       scheduleEnd: target.schedule[0]?.end ?? '08:00',
       scheduleLocation: target.schedule[0]?.location ?? 'Box',
       tags: target.tags.join(', '),
     });
+    setClassErrors({});
     setEditingClassId(id);
   };
 
   const handleRemoveClass = (id: string) => {
-    Alert.alert('Excluir aula', 'Tem certeza que deseja excluir esta aula e sessões relacionadas?', [
+    Alert.alert('Cancelar aula', 'Confirmar cancelamento também remove sessões relacionadas. Continuar?', [
       { text: 'Cancelar', style: 'cancel' },
       {
-        text: 'Excluir',
+        text: 'Cancelar aula',
         style: 'destructive',
         onPress: () => {
           deleteClass(id);
-          Alert.alert('Aula excluída', 'A aula e suas sessões foram removidas.');
+          Alert.alert('Aula cancelada', 'A aula e suas sessões foram removidas.');
         },
       },
     ]);
   };
 
+  const validateSessionForm = () => {
+    const errors: Partial<Record<keyof SessionFormState, string>> = {};
+
+    if (!sessionForm.classId.trim()) {
+      errors.classId = 'Informe o ID da aula.';
+    }
+
+    if (!sessionForm.startTime.trim() || !sessionForm.endTime.trim()) {
+      errors.startTime = 'Início e fim são obrigatórios.';
+    } else if (new Date(sessionForm.endTime) <= new Date(sessionForm.startTime)) {
+      errors.endTime = 'O fim deve ser depois do início.';
+    }
+
+    if (!sessionForm.capacity.trim()) {
+      errors.capacity = 'Capacidade é obrigatória.';
+    } else if (Number.isNaN(Number(sessionForm.capacity)) || Number(sessionForm.capacity) <= 0) {
+      errors.capacity = 'Use um número maior que zero.';
+    }
+
+    if (!sessionForm.location.trim()) {
+      errors.location = 'Local não pode ficar vazio.';
+    }
+
+    setSessionErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmitSession = () => {
-    if (!sessionForm.classId) {
-      Alert.alert('Associe a sessão a uma aula.');
+    const isValid = validateSessionForm();
+    if (!isValid) {
+      Alert.alert('Revise os campos', 'Corrija os destaques antes de salvar a sessão.');
       return;
     }
 
@@ -203,6 +265,7 @@ export default function InstructorClassesScreen() {
       }
 
       setSessionForm({ ...defaultSessionForm, classId: classes[0]?.id ?? '' });
+      setSessionErrors({});
       setEditingSessionId(null);
     });
   };
@@ -220,6 +283,7 @@ export default function InstructorClassesScreen() {
       tags: target.tags?.join(', ') ?? '',
       coachNotes: target.coachNotes,
     });
+    setSessionErrors({});
     setEditingSessionId(id);
   };
 
@@ -264,6 +328,9 @@ export default function InstructorClassesScreen() {
               onChangeText={(text) => setClassForm((prev) => ({ ...prev, capacity: text }))}
             />
           </View>
+          {(classErrors.title || classErrors.capacity) && (
+            <ThemedText style={styles.errorText}>{classErrors.title ?? classErrors.capacity}</ThemedText>
+          )}
           <TextInput
             style={styles.input}
             placeholder="Descrição"
@@ -290,12 +357,18 @@ export default function InstructorClassesScreen() {
               onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleEnd: text }))}
             />
           </View>
+          {(classErrors.scheduleDay || classErrors.scheduleStart || classErrors.scheduleEnd) && (
+            <ThemedText style={styles.errorText}>
+              {classErrors.scheduleDay ?? classErrors.scheduleStart ?? classErrors.scheduleEnd}
+            </ThemedText>
+          )}
           <TextInput
             style={styles.input}
             placeholder="Local"
             value={classForm.scheduleLocation}
             onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleLocation: text }))}
           />
+          {classErrors.scheduleLocation && <ThemedText style={styles.errorText}>{classErrors.scheduleLocation}</ThemedText>}
           <TextInput
             style={styles.input}
             placeholder="Tags separadas por vírgula"
@@ -355,6 +428,9 @@ export default function InstructorClassesScreen() {
                 </View>
               </ThemedView>
             ))}
+            {classes.length === 0 && (
+              <ThemedText style={styles.muted}>Nenhuma aula cadastrada. Crie sua primeira turma acima.</ThemedText>
+            )}
           </View>
         </ThemedView>
 
@@ -375,6 +451,9 @@ export default function InstructorClassesScreen() {
               onChangeText={(text) => setSessionForm((prev) => ({ ...prev, capacity: text }))}
             />
           </View>
+          {(sessionErrors.classId || sessionErrors.capacity) && (
+            <ThemedText style={styles.errorText}>{sessionErrors.classId ?? sessionErrors.capacity}</ThemedText>
+          )}
             <TextInput
               style={styles.input}
               placeholder="Início (ISO)"
@@ -387,12 +466,16 @@ export default function InstructorClassesScreen() {
               value={sessionForm.endTime}
               onChangeText={(text) => setSessionForm((prev) => ({ ...prev, endTime: text }))}
             />
+          {(sessionErrors.startTime || sessionErrors.endTime) && (
+            <ThemedText style={styles.errorText}>{sessionErrors.startTime ?? sessionErrors.endTime}</ThemedText>
+          )}
           <TextInput
             style={styles.input}
             placeholder="Local"
             value={sessionForm.location}
             onChangeText={(text) => setSessionForm((prev) => ({ ...prev, location: text }))}
           />
+          {sessionErrors.location && <ThemedText style={styles.errorText}>{sessionErrors.location}</ThemedText>}
           <TextInput
             style={styles.input}
             placeholder="Tags da sessão"
@@ -460,6 +543,9 @@ export default function InstructorClassesScreen() {
                 </ThemedView>
               );
             })}
+            {sortedSessions.length === 0 && (
+              <ThemedText style={styles.muted}>Nenhuma sessão agendada. Programe datas para suas aulas.</ThemedText>
+            )}
           </View>
         </ThemedView>
       </ScrollView>
@@ -500,6 +586,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: '#fff',
+  },
+  errorText: {
+    color: '#b42318',
   },
   buttonRow: {
     flexDirection: 'row',

@@ -108,6 +108,11 @@ export default function ClassCatalogScreen() {
         </ThemedView>
 
         <View style={styles.list}>
+          {classes.length === 0 && (
+            <ThemedText style={styles.muted}>
+              Nenhuma aula disponível no momento. Volte mais tarde ou fale com a equipe do box.
+            </ThemedText>
+          )}
           {filteredClasses.map((trainingClass) => {
             const capacity = getCapacityUsage(trainingClass.id);
             const nextSession = resolveNextSession(trainingClass.id);
@@ -160,9 +165,22 @@ export default function ClassCatalogScreen() {
             );
           })}
           {filteredClasses.length === 0 && (
-            <ThemedText style={styles.muted}>
-              Nenhuma aula encontrada. Ajuste os filtros ou tente outro termo.
-            </ThemedText>
+            <View style={styles.emptyState}>
+              <ThemedText style={styles.muted}>
+                Nenhuma aula encontrada. Ajuste os filtros ou tente outro termo.
+              </ThemedText>
+              <Pressable
+                style={styles.resetButton}
+                onPress={() => {
+                  setCategoryFilter('all');
+                  setLevelFilter('all');
+                  setSearch('');
+                }}>
+                <ThemedText type="defaultSemiBold" style={styles.resetButtonText}>
+                  Limpar filtros
+                </ThemedText>
+              </Pressable>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -277,5 +295,19 @@ const styles = StyleSheet.create({
   },
   muted: {
     opacity: 0.68,
+  },
+  emptyState: {
+    gap: 8,
+  },
+  resetButton: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#0e9aed',
+  },
+  resetButtonText: {
+    color: '#0b3b5a',
   },
 });
