@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 
@@ -21,7 +21,7 @@ const actions = [
 
 export default function MenuScreen() {
   const insets = useSafeAreaInsets();
-  const { hasRole } = useAuth();
+  const { hasRole, logout } = useAuth();
 
   const showPaymentTile = true;
   const visibleActions = showPaymentTile
@@ -36,8 +36,15 @@ export default function MenuScreen() {
       ]
     : [];
 
+  const handleLogout = () => {
+    Alert.alert('Sair da conta', 'Deseja realmente sair da sua conta?', [
+      { text: 'Não', style: 'cancel' },
+      { text: 'Sim', style: 'destructive', onPress: logout },
+    ]);
+  };
+
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}> 
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}>
@@ -91,6 +98,13 @@ export default function MenuScreen() {
             </View>
           </ThemedView>
         )}
+
+        <View style={styles.footerSpacer} />
+        <Pressable onPress={handleLogout} style={styles.logoutButton}>
+          <ThemedText type="defaultSemiBold" style={styles.logoutText}>
+            Sair da conta
+          </ThemedText>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -133,5 +147,19 @@ const styles = StyleSheet.create({
   },
   muted: {
     opacity: 0.7,
+  },
+  logoutButton: {
+    marginTop: 4,
+    marginBottom: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: '#022a4c',
+  },
+  logoutText: {
+    color: '#fff',
+  },
+  footerSpacer: {
+    height: 8,
   },
 });

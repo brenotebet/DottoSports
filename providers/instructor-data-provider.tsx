@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { File, Paths } from 'expo-file-system';
 
 import type {
   Attendance,
@@ -151,6 +152,42 @@ const defaultCard: CardOnFile = {
   label: 'Visa •••• 4242',
 };
 
+type PersistedInstructorData = {
+  classes: TrainingClass[];
+  sessions: ClassSession[];
+  enrollments: Enrollment[];
+  attendance: Attendance[];
+  payments: Payment[];
+  invoices: Invoice[];
+  paymentIntents: PaymentIntent[];
+  paymentSessions: PaymentSession[];
+  receipts: Receipt[];
+  settlements: Settlement[];
+  students: StudentProfile[];
+  cardOnFile: CardOnFile;
+};
+
+const instructorStateFile = (() => {
+  const candidates = [
+    () => Paths.document,
+    () => Paths.cache,
+  ];
+
+  for (const getDirectory of candidates) {
+    try {
+      const directory = getDirectory();
+
+      if (directory?.uri) {
+        return new File(directory, 'instructor-data.json');
+      }
+    } catch (error) {
+      console.warn('Não foi possível resolver um diretório para os dados do instrutor', error);
+    }
+  }
+
+  return null;
+})();
+
 export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [classes, setClasses] = useState<TrainingClass[]>(seedClasses);
   const [sessions, setSessions] = useState<ClassSession[]>(seedSessions);
@@ -164,6 +201,83 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [settlements, setSettlements] = useState<Settlement[]>(seedSettlements);
   const [students, setStudents] = useState<StudentProfile[]>(studentProfiles);
   const [cardOnFile, setCardOnFile] = useState<CardOnFile>(defaultCard);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (!instructorStateFile) {
+      setHydrated(true);
+      return;
+    }
+
+    const restoreData = async () => {
+      try {
+        if (!instructorStateFile.exists) {
+          setHydrated(true);
+          return;
+        }
+
+        const storedData = JSON.parse(await instructorStateFile.text()) as Partial<PersistedInstructorData>;
+
+        if (storedData.classes) setClasses(storedData.classes);
+        if (storedData.sessions) setSessions(storedData.sessions);
+        if (storedData.enrollments) setEnrollments(storedData.enrollments);
+        if (storedData.attendance) setAttendance(storedData.attendance);
+        if (storedData.payments) setPayments(storedData.payments);
+        if (storedData.invoices) setInvoices(storedData.invoices);
+        if (storedData.paymentIntents) setPaymentIntents(storedData.paymentIntents);
+        if (storedData.paymentSessions) setPaymentSessions(storedData.paymentSessions);
+        if (storedData.receipts) setReceipts(storedData.receipts);
+        if (storedData.settlements) setSettlements(storedData.settlements);
+        if (storedData.students) setStudents(storedData.students);
+        if (storedData.cardOnFile) setCardOnFile(storedData.cardOnFile);
+      } catch (error) {
+        console.warn('Não foi possível restaurar os dados do instrutor', error);
+      } finally {
+        setHydrated(true);
+      }
+    };
+
+    void restoreData();
+  }, []);
+
+  useEffect(() => {
+    if (!instructorStateFile || !hydrated) return;
+
+    try {
+      const payload: PersistedInstructorData = {
+        classes,
+        sessions,
+        enrollments,
+        attendance,
+        payments,
+        invoices,
+        paymentIntents,
+        paymentSessions,
+        receipts,
+        settlements,
+        students,
+        cardOnFile,
+      };
+
+      instructorStateFile.write(JSON.stringify(payload));
+    } catch (error) {
+      console.warn('Não foi possível salvar os dados do instrutor', error);
+    }
+  }, [
+    attendance,
+    cardOnFile,
+    classes,
+    enrollments,
+    hydrated,
+    invoices,
+    payments,
+    paymentIntents,
+    paymentSessions,
+    receipts,
+    sessions,
+    settlements,
+    students,
+  ]);
 
   const ensureStudentProfile = useCallback((email: string, displayName: string) => {
     const existingAccount = findAccountByEmail(email);
