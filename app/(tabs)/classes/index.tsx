@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -10,7 +10,6 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 export default function ClassCatalogScreen() {
-  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const { classes, sessions, getCapacityUsage } = useInstructorData();
 
@@ -61,7 +60,7 @@ export default function ClassCatalogScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 6 }]}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: 12 }]} edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           Encontre sua próxima aula
