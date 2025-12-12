@@ -470,6 +470,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const rosterByClass = useMemo(() => {
     return enrollments.reduce<Record<string, RosterEntry[]>>((acc, enrollment) => {
+      if (enrollment.status === 'cancelled') return acc;
+
       const student = students.find((item) => item.id === enrollment.studentId);
       if (!student) return acc;
 

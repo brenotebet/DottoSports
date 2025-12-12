@@ -9,7 +9,8 @@ import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 export default function InstructorDashboardScreen() {
-  const { sessions, classes, rosterByClass, toggleAttendance } = useInstructorData();
+  const { sessions, classes, rosterByClass, toggleAttendance, updateEnrollmentStatus } =
+    useInstructorData();
   const insets = useSafeAreaInsets();
 
   const upcomingSessions = sessions.slice(0, 3);
@@ -45,6 +46,25 @@ export default function InstructorDashboardScreen() {
     });
   };
 
+  const handleDropStudent = (classId: string, enrollmentId: string) => {
+    const className = classes.find((item) => item.id === classId)?.title ?? 'aula';
+    Alert.alert(
+      'Remover aluno',
+      `Deseja remover o aluno desta turma de ${className}? Ele perderá acesso imediato.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Remover',
+          style: 'destructive',
+          onPress: () => {
+            updateEnrollmentStatus(enrollmentId, 'cancelled');
+            Alert.alert('Aluno removido', 'A inscrição foi cancelada com sucesso.');
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
@@ -57,6 +77,9 @@ export default function InstructorDashboardScreen() {
 
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Sessões desta semana</ThemedText>
+          {upcomingSessions.length === 0 && (
+            <ThemedText style={styles.muted}>Nenhuma sessão agendada para esta semana.</ThemedText>
+          )}
           {upcomingSessions.map((session) => {
             const sessionClass = classes.find((c) => c.id === session.classId);
             return (
@@ -102,6 +125,9 @@ export default function InstructorDashboardScreen() {
 
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Listas e check-in</ThemedText>
+          {classRosterEntries.length === 0 && (
+            <ThemedText style={styles.muted}>Cadastre aulas para acompanhar check-ins.</ThemedText>
+          )}
           {classRosterEntries.map(({ trainingClass, roster }) => (
             <ThemedView key={trainingClass.id} style={styles.rosterCard}>
               <View style={styles.rosterHeader}>
@@ -152,6 +178,11 @@ export default function InstructorDashboardScreen() {
                           }>
                           <ThemedText style={[styles.actionText, styles.absentText]}>Falta</ThemedText>
                         </Pressable>
+                        <Pressable
+                          style={[styles.checkButton, styles.removeButton]}
+                          onPress={() => handleDropStudent(trainingClass.id, entry.enrollment.id)}>
+                          <ThemedText style={[styles.actionText, styles.absentText]}>Remover</ThemedText>
+                        </Pressable>
                       </View>
                     </View>
                   );
@@ -170,6 +201,9 @@ export default function InstructorDashboardScreen() {
             Acompanhe rapidamente quem está em dia, pendente ou com cobranças atrasadas.
           </ThemedText>
           <View style={styles.paymentList}>
+            {paymentHighlights.length === 0 && (
+              <ThemedText style={styles.muted}>Nenhum pagamento para monitorar agora.</ThemedText>
+            )}
             {paymentHighlights.map((item) => (
               <View key={item.student.id} style={styles.paymentRow}>
                 <View style={styles.rosterText}>
@@ -320,6 +354,10 @@ const styles = StyleSheet.create({
   },
   absentButton: {
     backgroundColor: '#fff1f1',
+    borderColor: '#ffb4b4',
+  },
+  removeButton: {
+    backgroundColor: '#ffe5e5',
     borderColor: '#ffb4b4',
   },
   actionText: {
