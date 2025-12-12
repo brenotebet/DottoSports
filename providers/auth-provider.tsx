@@ -1,6 +1,5 @@
 import { File, Paths } from 'expo-file-system';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { File, Paths } from 'expo-file-system';
 
 import type { UserRole } from '@/constants/schema';
 import { resolveSeedDisplayName, resolveSeedRole } from '@/constants/seed-data';
