@@ -1,5 +1,5 @@
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -21,6 +21,7 @@ export default function InstructorPaymentsScreen() {
     startPaymentSession,
     processPaymentWebhook,
   } = useInstructorData();
+  const insets = useSafeAreaInsets();
 
   const findIntentForPayment = (paymentId: string) =>
     paymentIntents.find((intent) => intent.paymentId === paymentId);
@@ -84,7 +85,9 @@ export default function InstructorPaymentsScreen() {
   const recentReceipts = receipts.slice(0, 4);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView
+      style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
+      edges={['top', 'left', 'right', 'bottom']}>
       <TopBar title="Cobranças e pagamentos" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>

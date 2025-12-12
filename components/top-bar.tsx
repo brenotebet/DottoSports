@@ -1,6 +1,5 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { IconSymbol } from './ui/icon-symbol';
 import { ThemedText } from './themed-text';
@@ -12,10 +11,9 @@ interface TopBarProps {
 
 export function TopBar({ title }: TopBarProps) {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 4 }]}>
+    <View style={styles.container}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Voltar"

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Link } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
@@ -18,6 +18,7 @@ export default function PaymentsScreen() {
   const { outstandingBalances, ensureStudentProfile, cardOnFile, payOutstandingPayment } =
     useInstructorData();
   const [studentId, setStudentId] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (user) {
@@ -55,7 +56,9 @@ export default function PaymentsScreen() {
   const nextDue = studentBalances[0]?.payment.dueDate;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView
+      style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
+      edges={['top', 'left', 'right', 'bottom']}>
       <TopBar title="Pagamentos" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
