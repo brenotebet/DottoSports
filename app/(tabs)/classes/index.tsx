@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -14,6 +14,7 @@ export const options = { headerShown: false };
 export default function ClassCatalogScreen() {
   const colorScheme = useColorScheme();
   const { classes, sessions, getCapacityUsage } = useInstructorData();
+  const insets = useSafeAreaInsets();
 
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [levelFilter, setLevelFilter] = useState<string>('all');
@@ -62,7 +63,9 @@ export default function ClassCatalogScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView
+      style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
+      edges={['top', 'left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           Encontre sua próxima aula
@@ -174,7 +177,6 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: 20,
-    paddingTop: 16,
     paddingBottom: 24,
     gap: 16,
   },

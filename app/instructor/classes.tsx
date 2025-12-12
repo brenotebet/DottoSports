@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -66,6 +66,7 @@ export default function InstructorClassesScreen() {
     updateSession,
     deleteSession,
   } = useInstructorData();
+  const insets = useSafeAreaInsets();
 
   const [classForm, setClassForm] = useState<ClassFormState>(defaultClassForm);
   const [sessionForm, setSessionForm] = useState<SessionFormState>({
@@ -237,7 +238,9 @@ export default function InstructorClassesScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+    <SafeAreaView
+      style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
+      edges={['top', 'left', 'right', 'bottom']}>
       <TopBar title="Aulas e sessões" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
