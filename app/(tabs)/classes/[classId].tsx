@@ -3,14 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { TopBar } from '@/components/top-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TopBar } from '@/components/top-bar';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
-export const options = { headerShown: false };
+export const options = { headerShown: true };
 
 export default function ClassDetailsScreen() {
   const { classId } = useLocalSearchParams<{ classId: string }>();
@@ -90,6 +90,7 @@ export default function ClassDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
+      <TopBar title="Detalhes da aula" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           {trainingClass.title}

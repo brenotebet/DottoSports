@@ -1,17 +1,11 @@
 import { Stack } from 'expo-router';
 
-import { Colors } from '@/constants/theme';
 
 export default function ClassCatalogLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: false,
-        headerStyle: { backgroundColor: '#e9f4ff' },
-        headerTintColor: Colors.light.text,
-        headerTitleStyle: { fontWeight: '700', fontSize: 17 },
-        headerBackTitleVisible: false,
-        headerTitleAlign: 'left',
+          headerShown: false,
       }}>
       <Stack.Screen name="index" options={{ title: 'Catálogo de aulas' }} />
       <Stack.Screen
