@@ -3,12 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TopBar } from '@/components/top-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { TopBar } from '@/components/top-bar';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { useInstructorData } from '@/providers/instructor-data-provider';
+
+export const options = { headerShown: false };
 
 export default function ClassDetailsScreen() {
   const { classId } = useLocalSearchParams<{ classId: string }>();
@@ -173,6 +175,7 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 28,
     gap: 14,
   },

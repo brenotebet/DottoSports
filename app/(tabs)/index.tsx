@@ -223,18 +223,16 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
   checkInButton: {
-    marginTop: 10,
     backgroundColor: '#022a4c',
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
-    flex: 1,
+    alignSelf: 'stretch',
   },
   rowActions: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 10,
     marginTop: 10,
-    flexWrap: 'wrap',
   },
   checkInText: {
     color: '#fff',

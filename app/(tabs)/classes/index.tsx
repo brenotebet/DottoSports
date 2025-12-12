@@ -1,16 +1,18 @@
 import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { TopBar } from '@/components/top-bar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
+export const options = { headerShown: false };
+
 export default function ClassCatalogScreen() {
-  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const { classes, sessions, getCapacityUsage } = useInstructorData();
 
@@ -61,7 +63,8 @@ export default function ClassCatalogScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 6 }]}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+      <TopBar title="Catálogo de aulas" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           Encontre sua próxima aula
@@ -173,6 +176,7 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 24,
     gap: 16,
   },
