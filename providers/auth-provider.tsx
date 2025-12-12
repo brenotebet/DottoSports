@@ -1,9 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { File, Paths } from 'expo-file-system';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { getAccountInfo, sendEmailVerification, signInWithEmail, signUpWithEmail } from '@/services/firebase-auth';
-import { resolveSeedDisplayName, resolveSeedRole } from '@/constants/seed-data';
 import type { UserRole } from '@/constants/schema';
+import { resolveSeedDisplayName, resolveSeedRole } from '@/constants/seed-data';
+import { getAccountInfo, sendEmailVerification, signInWithEmail, signUpWithEmail } from '@/services/firebase-auth';
 
 export type AuthenticatedUser = {
   email: string;
@@ -24,6 +24,7 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
 const authStateFile = (() => {
   const candidates = [
     () => Paths.document,
@@ -113,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const storedUser = JSON.parse(await authStateFile.text()) as AuthenticatedUser;
-
+        
         if (storedUser && isMounted) {
           setUser(storedUser);
         }
