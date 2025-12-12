@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 
 import { getAccountInfo, sendEmailVerification, signInWithEmail, signUpWithEmail } from '@/services/firebase-auth';
 import { resolveSeedDisplayName, resolveSeedRole } from '@/constants/seed-data';
@@ -24,7 +24,26 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const authStateFile = `${FileSystem.documentDirectory ?? FileSystem.cacheDirectory ?? ''}auth-user.json`;
+const authStateFile = (() => {
+  const candidates = [
+    () => Paths.document,
+    () => Paths.cache,
+  ];
+
+  for (const getDirectory of candidates) {
+    try {
+      const directory = getDirectory();
+
+      if (directory?.uri) {
+        return new File(directory, 'auth-user.json');
+      }
+    } catch (error) {
+      console.warn('Não foi possível resolver um diretório para o cache de autenticação', error);
+    }
+  }
+
+  return null;
+})();
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
@@ -45,12 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       if (nextUser) {
-        await FileSystem.writeAsStringAsync(authStateFile, JSON.stringify(nextUser));
+        authStateFile.write(JSON.stringify(nextUser));
       } else {
-        const fileInfo = await FileSystem.getInfoAsync(authStateFile);
-        if (fileInfo.exists) {
-          await FileSystem.deleteAsync(authStateFile, { idempotent: true });
-        }
+        authStateFile.delete();
       }
     } catch (error) {
       console.warn('Não foi possível atualizar o cache de autenticação', error);
@@ -91,14 +107,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const fileInfo = await FileSystem.getInfoAsync(authStateFile);
-        if (!fileInfo.exists) {
+        if (!authStateFile.exists) {
           setInitializing(false);
           return;
         }
 
-        const content = await FileSystem.readAsStringAsync(authStateFile);
-        const storedUser = JSON.parse(content) as AuthenticatedUser;
+        const storedUser = JSON.parse(await authStateFile.text()) as AuthenticatedUser;
 
         if (storedUser && isMounted) {
           setUser(storedUser);
