@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { TopBar } from '@/components/top-bar';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { useInstructorData } from '@/providers/instructor-data-provider';
@@ -55,8 +54,7 @@ export default function ClassDetailsScreen() {
 
   if (!trainingClass) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        <TopBar title="Detalhes da aula" />
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <View style={styles.container}>
           <ThemedText style={styles.muted}>Aula não encontrada.</ThemedText>
         </View>
@@ -88,8 +86,7 @@ export default function ClassDetailsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-      <TopBar title="Detalhes da aula" />
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           {trainingClass.title}
@@ -173,6 +170,7 @@ const styles = StyleSheet.create({
   },
   container: {
     paddingHorizontal: 20,
+    paddingTop: 12,
     paddingBottom: 28,
     gap: 14,
   },
