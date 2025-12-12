@@ -57,8 +57,7 @@ export default function ClassDetailsScreen() {
 
   if (!trainingClass) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-        <TopBar title="Detalhes da aula" />
+      <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
         <View style={styles.container}>
           <ThemedText style={styles.muted}>Aula não encontrada.</ThemedText>
         </View>
@@ -90,8 +89,7 @@ export default function ClassDetailsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-      <TopBar title="Detalhes da aula" />
+    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           {trainingClass.title}
