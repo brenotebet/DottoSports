@@ -53,6 +53,20 @@ type SystemEvent = {
   context?: Record<string, unknown>;
 };
 
+type PaymentLedgerEntry = {
+  payment: Payment;
+  invoice?: Invoice;
+  status: Payment['status'] | 'overdue';
+};
+
+type StudentAccountSnapshot = {
+  enrollments: Enrollment[];
+  ledger: PaymentLedgerEntry[];
+  outstanding: PaymentLedgerEntry[];
+  nextPayment?: PaymentLedgerEntry;
+  openBalance: number;
+};
+
 type AnalyticsSnapshot = {
   totalRevenue: number;
   pendingRevenue: number;
@@ -85,6 +99,7 @@ type InstructorDataContextValue = {
   }[];
   cardOnFile: CardOnFile;
   rosterByClass: Record<string, RosterEntry[]>;
+  getStudentAccountSnapshot: (studentId: string) => StudentAccountSnapshot;
   payOutstandingPayment: (paymentId: string) => { session: PaymentSession; intent: PaymentIntent };
   createClass: (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateClass: (id: string, payload: Partial<TrainingClass>) => void;
@@ -142,7 +157,11 @@ const resolvePaymentStatus = (
   invoices: Invoice[],
   enrollmentId: string,
 ) => {
-  const relevantPayment = payments.find((payment) => payment.enrollmentId === enrollmentId);
+  const relevantPayment = payments
+    .filter((payment) => payment.enrollmentId === enrollmentId)
+    .sort(
+      (a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime(),
+    )[0];
 
   if (!relevantPayment) {
     return { paymentStatus: 'paid' as const, paymentLabel: 'Sem cobranças ativas' };
@@ -162,6 +181,42 @@ const resolvePaymentStatus = (
     paymentStatus: isOverdue ? ('overdue' as const) : ('pending' as const),
     paymentLabel: isOverdue ? 'Em atraso' : 'Pendente',
   };
+};
+
+const resolvePaymentLedger = (
+  payments: Payment[],
+  invoices: Invoice[],
+  enrollments: Enrollment[],
+  studentId: string,
+): PaymentLedgerEntry[] => {
+  const cancelledEnrollmentIds = new Set(
+    enrollments.filter((item) => item.status === 'cancelled').map((item) => item.id),
+  );
+
+  return payments
+    .filter(
+      (payment) =>
+        payment.studentId === studentId && !cancelledEnrollmentIds.has(payment.enrollmentId ?? ''),
+    )
+    .map((payment) => {
+      const invoice = invoices.find((item) => item.paymentId === payment.id);
+      const isPaid = payment.status === 'paid' || invoice?.status === 'paid';
+      const isOverdue = new Date(payment.dueDate) < new Date();
+
+      return {
+        payment,
+        invoice,
+        status:
+          payment.status === 'failed'
+            ? 'failed'
+            : isPaid
+              ? 'paid'
+              : isOverdue
+                ? 'overdue'
+                : payment.status,
+      } satisfies PaymentLedgerEntry;
+    })
+    .sort((a, b) => new Date(a.payment.dueDate).getTime() - new Date(b.payment.dueDate).getTime());
 };
 
 const defaultCard: CardOnFile = {
@@ -535,6 +590,21 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         } as const;
       });
   }, [enrollments, invoices, payments, students]);
+
+  const getStudentAccountSnapshot = useCallback(
+    (studentId: string): StudentAccountSnapshot => {
+      const activeEnrollments = enrollments.filter(
+        (item) => item.studentId === studentId && item.status !== 'cancelled',
+      );
+      const ledger = resolvePaymentLedger(payments, invoices, enrollments, studentId);
+      const outstanding = ledger.filter((item) => item.status !== 'paid');
+      const nextPayment = outstanding[0];
+      const openBalance = outstanding.reduce((sum, entry) => sum + entry.payment.amount, 0);
+
+      return { enrollments: activeEnrollments, ledger, outstanding, nextPayment, openBalance };
+    },
+    [enrollments, invoices, payments],
+  );
 
   const analytics = useMemo<AnalyticsSnapshot>(() => {
     const totalRevenue = payments
@@ -1080,6 +1150,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       outstandingBalances,
       cardOnFile,
       rosterByClass,
+      getStudentAccountSnapshot,
       payOutstandingPayment,
       createClass,
       updateClass,
@@ -1119,6 +1190,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       outstandingBalances,
       cardOnFile,
       rosterByClass,
+      getStudentAccountSnapshot,
       payOutstandingPayment,
       ensureStudentProfile,
       enrollStudentInClass,
