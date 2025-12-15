@@ -12,6 +12,10 @@ export default function SignupScreen() {
   const colorScheme = useColorScheme();
   const { signup } = useAuth();
 
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -19,7 +23,31 @@ export default function SignupScreen() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  const validateBirthDate = (value: string) => /^\d{2}\/\d{2}\/\d{4}$/.test(value.trim());
+  const normalizeCpf = (value: string) => value.replace(/\D/g, '');
+
   const onSubmit = async () => {
+    const trimmedFirstName = firstName.trim();
+    const trimmedLastName = lastName.trim();
+    const trimmedBirthDate = birthDate.trim();
+    const normalizedCpf = normalizeCpf(cpf);
+    const trimmedEmail = email.trim();
+
+    if (!trimmedFirstName || !trimmedLastName || !trimmedBirthDate || !normalizedCpf || !trimmedEmail) {
+      setError('Preencha todos os campos obrigatórios.');
+      return;
+    }
+
+    if (!validateBirthDate(trimmedBirthDate)) {
+      setError('Use o formato DD/MM/AAAA para a data de nascimento.');
+      return;
+    }
+
+    if (normalizedCpf.length !== 11) {
+      setError('Digite um CPF válido com 11 dígitos.');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('As senhas precisam ser iguais.');
       return;
@@ -30,8 +58,19 @@ export default function SignupScreen() {
     setSuccessMessage(null);
 
     try {
-      await signup(email, password);
-      setSuccessMessage(`Enviamos um e-mail de verificação para ${email.trim()}. Confirme para acessar sua conta.`);
+      await signup({
+        email: trimmedEmail,
+        password,
+        firstName: trimmedFirstName,
+        lastName: trimmedLastName,
+        birthDate: trimmedBirthDate,
+        cpf: normalizedCpf,
+      });
+      setSuccessMessage(`Enviamos um e-mail de verificação para ${trimmedEmail}. Confirme para acessar sua conta.`);
+      setFirstName('');
+      setLastName('');
+      setBirthDate('');
+      setCpf('');
       setEmail('');
       setPassword('');
       setConfirmPassword('');
@@ -56,6 +95,57 @@ export default function SignupScreen() {
             Criar conta
           </ThemedText>
           <ThemedText style={[styles.subtitle, { color: textColor }]}>Use seu e-mail para se registrar.</ThemedText>
+
+          <TextInput
+            autoComplete="name"
+            placeholder="Nome"
+            placeholderTextColor={placeholderColor}
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
+            value={firstName}
+            onChangeText={setFirstName}
+          />
+
+          <TextInput
+            autoComplete="name"
+            placeholder="Sobrenome"
+            placeholderTextColor={placeholderColor}
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
+            value={lastName}
+            onChangeText={setLastName}
+          />
+
+          <TextInput
+            autoComplete="off"
+            keyboardType="number-pad"
+            placeholder="Data de nascimento (DD/MM/AAAA)"
+            placeholderTextColor={placeholderColor}
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
+            value={birthDate}
+            onChangeText={setBirthDate}
+          />
+
+          <TextInput
+            autoComplete="off"
+            keyboardType="numeric"
+            placeholder="CPF"
+            placeholderTextColor={placeholderColor}
+            style={[
+              styles.input,
+              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+            ]}
+            value={cpf}
+            onChangeText={setCpf}
+            maxLength={14}
+          />
 
           <TextInput
             autoCapitalize="none"
