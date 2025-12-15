@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -14,16 +14,11 @@ import { useInstructorData } from '@/providers/instructor-data-provider';
 export default function EvaluationsScreen() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const {
-    ensureStudentProfile,
-    getStudentEvaluations,
-    createEvaluation,
-    updateEvaluation,
-    deleteEvaluation,
-  } = useInstructorData();
+  const { hasRole } = useAuth();
+  const { students, getStudentEvaluations, createEvaluation, updateEvaluation, deleteEvaluation } =
+    useInstructorData();
 
-  const [studentId, setStudentId] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [questionnaire, setQuestionnaire] = useState<Evaluation['questionnaire']>({
     trainingFrequency: '',
@@ -36,19 +31,7 @@ export default function EvaluationsScreen() {
   const [notes, setNotes] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user) {
-      const profile = ensureStudentProfile(user.email, user.displayName);
-      setStudentId(profile.id);
-    }
-  }, [ensureStudentProfile, user]);
-
-  const evaluations = useMemo(
-    () => (studentId ? getStudentEvaluations(studentId) : []),
-    [getStudentEvaluations, studentId],
-  );
-
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setDate(new Date().toISOString().slice(0, 10));
     setQuestionnaire({
       trainingFrequency: '',
@@ -60,16 +43,36 @@ export default function EvaluationsScreen() {
     });
     setNotes('');
     setEditingId(null);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (students.length > 0 && !selectedStudentId) {
+      setSelectedStudentId(students[0].id);
+    }
+  }, [selectedStudentId, students]);
+
+  useEffect(() => {
+    resetForm();
+  }, [resetForm, selectedStudentId]);
+
+  const evaluations = useMemo(
+    () => (selectedStudentId ? getStudentEvaluations(selectedStudentId) : []),
+    [getStudentEvaluations, selectedStudentId],
+  );
+
+  const selectedStudent = useMemo(
+    () => students.find((student) => student.id === selectedStudentId) ?? null,
+    [selectedStudentId, students],
+  );
 
   const handleSubmit = () => {
-    if (!studentId) {
-      Alert.alert('Perfil não encontrado', 'Conclua login para registrar a avaliação.');
+    if (!selectedStudentId) {
+      Alert.alert('Selecione um aluno', 'Escolha um aluno para registrar a avaliação.');
       return;
     }
 
     const payload = {
-      studentId,
+      studentId: selectedStudentId,
       date,
       questionnaire,
       notes,
@@ -87,6 +90,7 @@ export default function EvaluationsScreen() {
   };
 
   const handleEdit = (evaluation: Evaluation) => {
+    setSelectedStudentId(evaluation.studentId);
     setEditingId(evaluation.id);
     setDate(evaluation.date);
     setQuestionnaire(evaluation.questionnaire);
@@ -122,6 +126,24 @@ export default function EvaluationsScreen() {
     </View>
   );
 
+  if (!hasRole(['INSTRUCTOR', 'ADMIN'])) {
+    return (
+      <SafeAreaView
+        style={[styles.safeArea, { paddingTop: insets.top }]}
+        edges={['top', 'left', 'right', 'bottom']}>
+        <TopBar title="Avaliações" />
+        <View style={[styles.container, { flex: 1, justifyContent: 'center' }]}>
+          <ThemedText type="title" style={styles.heading}>
+            Acesso restrito
+          </ThemedText>
+          <ThemedText style={styles.leadText}>
+            Entre com uma conta de instrutor ou administrador para registrar e gerenciar avaliações.
+          </ThemedText>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top }]}
@@ -132,6 +154,45 @@ export default function EvaluationsScreen() {
         <ThemedText style={styles.leadText}>
           Preencha o questionário físico e acompanhe as avaliações anteriores para manter o progresso claro.
         </ThemedText>
+
+        <ThemedView style={styles.card}>
+          <ThemedText type="subtitle">Selecione o aluno</ThemedText>
+          <ThemedText style={styles.muted}>
+            Atribua o questionário a um cliente com conta ativa.
+          </ThemedText>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}>
+            {students.map((student) => {
+              const isSelected = student.id === selectedStudentId;
+
+              return (
+                <Pressable
+                  key={student.id}
+                  style={[styles.chip, isSelected && styles.chipSelected]}
+                  onPress={() => setSelectedStudentId(student.id)}>
+                  <ThemedText
+                    type="defaultSemiBold"
+                    style={isSelected ? styles.chipTextSelected : undefined}>
+                    {student.fullName}
+                  </ThemedText>
+                  <ThemedText style={[styles.mutedSmall, isSelected && styles.chipTextSelected]}>
+                    {student.phone}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {!students.length && (
+            <ThemedText style={styles.muted}>Nenhum aluno encontrado para atribuir.</ThemedText>
+          )}
+          {selectedStudent ? (
+            <ThemedText style={styles.mutedSmall}>
+              Atribuindo avaliação para {selectedStudent.fullName}.
+            </ThemedText>
+          ) : null}
+        </ThemedView>
 
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">
@@ -175,7 +236,7 @@ export default function EvaluationsScreen() {
             />
           </View>
 
-          <Pressable style={styles.submitButton} onPress={handleSubmit}>
+          <Pressable style={styles.submitButton} onPress={handleSubmit} disabled={!selectedStudentId}>
             <ThemedText type="defaultSemiBold" style={styles.submitText}>
               {editingId ? 'Salvar alterações' : 'Registrar avaliação'}
             </ThemedText>
@@ -304,5 +365,26 @@ const styles = StyleSheet.create({
   },
   destructiveText: {
     color: '#a60000',
+  },
+  chipRow: {
+    gap: 10,
+    paddingVertical: 4,
+  },
+  chip: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#c2d9ef',
+    minWidth: 160,
+    gap: 4,
+  },
+  chipSelected: {
+    backgroundColor: '#022a4c',
+    borderColor: '#022a4c',
+  },
+  chipTextSelected: {
+    color: '#fff',
   },
 });
