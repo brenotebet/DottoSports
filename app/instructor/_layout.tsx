@@ -16,6 +16,7 @@ export default function InstructorLayout() {
       }}>
       <Stack.Screen name="dashboard" />
       <Stack.Screen name="classes" />
+      <Stack.Screen name="evaluations" />
       <Stack.Screen name="payments" />
       <Stack.Screen name="payments/[classId]" />
       <Stack.Screen name="rosters/index" />
