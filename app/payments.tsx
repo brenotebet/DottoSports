@@ -132,11 +132,31 @@ export default function PaymentsScreen() {
   );
 }
 
-function StatusPill({ status }: { status: 'pending' | 'overdue' | 'failed' }) {
+function StatusPill({ status }: { status: 'pending' | 'overdue' | 'failed' | 'paid' }) {
   const label =
-    status === 'pending' ? 'Pendente' : status === 'overdue' ? 'Em atraso' : 'Falhou';
-  const background = status === 'failed' ? '#ffe5e5' : status === 'overdue' ? '#fff5e5' : '#e5f6ff';
-  const color = status === 'failed' ? '#b42318' : status === 'overdue' ? '#b54708' : '#0b6fb6';
+    status === 'pending'
+      ? 'Pendente'
+      : status === 'overdue'
+        ? 'Em atraso'
+        : status === 'failed'
+          ? 'Falhou'
+          : 'Pago';
+  const background =
+    status === 'failed'
+      ? '#ffe5e5'
+      : status === 'overdue'
+        ? '#fff5e5'
+        : status === 'paid'
+          ? '#e7f8ed'
+          : '#e5f6ff';
+  const color =
+    status === 'failed'
+      ? '#b42318'
+      : status === 'overdue'
+        ? '#b54708'
+        : status === 'paid'
+          ? '#157347'
+          : '#0b6fb6';
 
   return (
     <View style={[styles.pill, { backgroundColor: background }]}> 

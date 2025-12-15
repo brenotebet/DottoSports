@@ -1,4 +1,5 @@
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Link } from 'expo-router';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -10,77 +11,22 @@ import { useInstructorData } from '@/providers/instructor-data-provider';
 const formatBRL = (amount: number) => `R$ ${amount.toFixed(2)}`;
 
 export default function InstructorPaymentsScreen() {
-  const {
-    outstandingBalances,
-    paymentIntents,
-    paymentSessions,
-    receipts,
-    settlements,
-    enrollments,
-    createPaymentIntentForEnrollment,
-    startPaymentSession,
-    processPaymentWebhook,
-  } = useInstructorData();
+  const { classes, outstandingBalances, receipts, rosterByClass, settlements, enrollments } =
+    useInstructorData();
   const insets = useSafeAreaInsets();
 
-  const findIntentForPayment = (paymentId: string) =>
-    paymentIntents.find((intent) => intent.paymentId === paymentId);
+  const classSummaries = classes.map((trainingClass) => {
+    const roster = rosterByClass[trainingClass.id] ?? [];
+    const outstandingForClass = outstandingBalances.filter((item) => {
+      const enrollment = enrollments.find((en) => en.id === item.payment.enrollmentId);
+      return enrollment?.classId === trainingClass.id;
+    });
 
-  const findSessionForIntent = (intentId?: string) =>
-    intentId ? paymentSessions.find((session) => session.intentId === intentId) : undefined;
+    const pendingCount = outstandingForClass.filter((item) => item.status === 'pending').length;
+    const overdueCount = outstandingForClass.filter((item) => item.status === 'overdue').length;
 
-  const handleStartCheckout = (
-    paymentId: string,
-    enrollmentId: string | undefined,
-    amount: number,
-    method: 'credit_card' | 'pix' | 'cash',
-    description?: string,
-  ) => {
-    let intent = findIntentForPayment(paymentId);
-
-    if (!intent && enrollmentId) {
-      intent = createPaymentIntentForEnrollment(
-        enrollmentId,
-        amount,
-        method,
-        description ?? 'Cobrança rápida',
-      );
-    }
-
-    if (!intent) {
-      Alert.alert('Intent não encontrada', 'Não foi possível iniciar o checkout.');
-      return;
-    }
-
-    const session = startPaymentSession(intent.id, intent);
-    Alert.alert('Sessão criada', `Checkout criado: ${session.checkoutUrl}`);
-  };
-
-  const handleWebhookSimulation = (
-    paymentId: string,
-    outcome: 'succeeded' | 'failed',
-  ) => {
-    const intent = findIntentForPayment(paymentId);
-    const session = findSessionForIntent(intent?.id);
-
-    if (!intent || !session) {
-      Alert.alert('Sessão ausente', 'Inicie um checkout antes de simular o webhook.');
-      return;
-    }
-
-    processPaymentWebhook(
-      session.id,
-      outcome,
-      outcome === 'failed' ? 'Falha simulada pelo instrutor' : undefined,
-    );
-
-    Alert.alert(
-      'Webhook recebido',
-      outcome === 'succeeded'
-        ? 'Pagamento marcado como pago e recibo emitido.'
-        : 'Cobrança marcada como falha. O aluno deve tentar novamente.',
-    );
-  };
+    return { trainingClass, roster, pendingCount, overdueCount };
+  });
 
   const recentReceipts = receipts.slice(0, 4);
 
@@ -90,83 +36,51 @@ export default function InstructorPaymentsScreen() {
       edges={['left', 'right', 'bottom']}>
       <TopBar title="Cobranças e pagamentos" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-
         <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Saldos em aberto</ThemedText>
-          {outstandingBalances.length === 0 && (
-            <ThemedText style={styles.muted}>Nenhuma pendência no momento.</ThemedText>
+          <ThemedText type="subtitle">Cobranças por turma</ThemedText>
+          <ThemedText style={styles.muted}>
+            Organize as pendências navegando por turma antes de abrir cada cobrança.
+          </ThemedText>
+
+          {classSummaries.length === 0 && (
+            <ThemedText style={styles.muted}>Nenhuma turma com pagamentos para monitorar.</ThemedText>
           )}
-          {outstandingBalances.map((item) => {
-            const enrollment = enrollments.find((en) => en.id === item.payment.enrollmentId);
-            const studentName = item.student?.fullName ?? 'Aluno sem nome';
-            return (
-              <View key={item.payment.id} style={styles.balanceRow}>
+
+          {classSummaries.map(({ trainingClass, roster, pendingCount, overdueCount }) => (
+            <Link
+              key={trainingClass.id}
+              href={{ pathname: '/instructor/payments/[classId]', params: { classId: trainingClass.id } }}
+              asChild>
+              <Pressable style={styles.balanceRow}>
                 <View style={styles.balanceHeader}>
                   <View style={styles.balanceText}>
-                    <ThemedText type="defaultSemiBold">{item.payment.description ?? 'Cobrança'}</ThemedText>
+                    <ThemedText type="defaultSemiBold">{trainingClass.title}</ThemedText>
                     <ThemedText style={styles.muted}>
-                      {formatBRL(item.payment.amount)} · vencimento {item.payment.dueDate}
+                      {trainingClass.schedule
+                        .map(
+                          (slot) =>
+                            `${slot.day} ${slot.start}-${slot.end} (${slot.startDate ?? 'início imediato'} a ${slot.endDate ?? 'sem data final'})`,
+                        )
+                        .join(' · ')}
                     </ThemedText>
-                    <ThemedText style={styles.muted}>
-                      {enrollment ? `Turma: ${enrollment.classId}` : 'Sem vínculo de matrícula'}
-                    </ThemedText>
-                    <ThemedText style={styles.muted}>
-                      {`Aluno: ${studentName}${item.email ? ` • ${item.email}` : ''}`}
-                    </ThemedText>
+                    <ThemedText style={styles.muted}>{roster.length} alunos matriculados</ThemedText>
                   </View>
-                  <ThemedView
-                    style={[
-                      styles.badge,
-                      item.status === 'pending' && styles.badgePending,
-                      item.status === 'overdue' && styles.badgeOverdue,
-                      item.status === 'failed' && styles.badgeFailed,
-                    ]}>
-                    <ThemedText type="defaultSemiBold" style={styles.badgeText}>
-                      {item.status === 'pending'
-                        ? 'Pendente'
-                        : item.status === 'overdue'
-                          ? 'Em atraso'
-                          : 'Falhou'}
-                    </ThemedText>
-                  </ThemedView>
-                </View>
-
-                <View style={styles.actionColumn}>
-                  <Pressable
-                    style={styles.linkButton}
-                    onPress={() =>
-                      handleStartCheckout(
-                        item.payment.id,
-                        item.payment.enrollmentId,
-                        item.payment.amount,
-                        item.payment.method,
-                        item.payment.description,
-                      )
-                    }>
-                    <ThemedText type="defaultSemiBold" style={styles.linkButtonText}>
-                      Abrir checkout
-                    </ThemedText>
-                  </Pressable>
-                  <View style={styles.webhookRow}>
-                    <Pressable
-                      style={[styles.webhookButton, styles.successButton]}
-                      onPress={() => handleWebhookSimulation(item.payment.id, 'succeeded')}>
-                      <ThemedText type="defaultSemiBold" style={styles.webhookText}>
-                        Webhook sucesso
+                  <View style={styles.tagRow}>
+                    <ThemedView style={[styles.badge, styles.badgePending]}>
+                      <ThemedText type="defaultSemiBold" style={styles.badgeText}>
+                        {pendingCount} pendente(s)
                       </ThemedText>
-                    </Pressable>
-                    <Pressable
-                      style={[styles.webhookButton, styles.failButton]}
-                      onPress={() => handleWebhookSimulation(item.payment.id, 'failed')}>
-                      <ThemedText type="defaultSemiBold" style={[styles.webhookText, styles.failText]}>
-                        Webhook falha
+                    </ThemedView>
+                    <ThemedView style={[styles.badge, styles.badgeOverdue]}>
+                      <ThemedText type="defaultSemiBold" style={styles.badgeText}>
+                        {overdueCount} em atraso
                       </ThemedText>
-                    </Pressable>
+                    </ThemedView>
                   </View>
                 </View>
-              </View>
-            );
-          })}
+              </Pressable>
+            </Link>
+          ))}
         </ThemedView>
 
         <ThemedView style={styles.card}>
@@ -260,49 +174,16 @@ const styles = StyleSheet.create({
   badgeOverdue: {
     backgroundColor: '#ffd6d6',
   },
-  badgeFailed: {
-    backgroundColor: '#ffe4f0',
-  },
   badgeText: {
     color: '#1b1b1b',
   },
-  actionColumn: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 8,
-    marginTop: 4,
-    alignSelf: 'stretch',
-  },
-  linkButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#0b3d67',
-    borderRadius: 12,
-  },
-  linkButtonText: {
-    color: 'white',
-  },
-  webhookRow: {
+  tagRow: {
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
   },
-  webhookButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  successButton: {
-    backgroundColor: '#d1f5e1',
-  },
-  failButton: {
-    backgroundColor: '#ffe5e5',
-  },
-  webhookText: {
-    color: '#0c2d4a',
-  },
-  failText: {
-    color: '#a1133a',
+  linkButtonText: {
+    color: '#0b3d67',
   },
   receiptRow: {
     paddingVertical: 10,

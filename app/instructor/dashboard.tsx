@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -9,8 +9,7 @@ import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 export default function InstructorDashboardScreen() {
-  const { sessions, classes, rosterByClass, toggleAttendance, updateEnrollmentStatus } =
-    useInstructorData();
+  const { sessions, classes, rosterByClass } = useInstructorData();
   const insets = useSafeAreaInsets();
 
   const upcomingSessions = sessions.slice(0, 3);
@@ -27,44 +26,6 @@ export default function InstructorDashboardScreen() {
       status: entry.paymentStatus,
       label: entry.paymentLabel,
     }));
-
-  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
-    Alert.alert(title, message, [
-      { text: 'Não', style: 'cancel' },
-      { text: 'Sim', onPress: onConfirm },
-    ]);
-  };
-
-  const handleCheckIn = (
-    sessionId: string,
-    enrollmentId: string,
-    status: 'present' | 'absent',
-  ) => {
-    const label = status === 'present' ? 'presença' : 'falta';
-    confirmAction('Confirmar atualização', `Deseja marcar ${label} para este aluno?`, () => {
-      toggleAttendance(sessionId, enrollmentId, status);
-      Alert.alert('Registro salvo', `Check-in atualizado como ${label}.`);
-    });
-  };
-
-  const handleDropStudent = (classId: string, enrollmentId: string) => {
-    const className = classes.find((item) => item.id === classId)?.title ?? 'aula';
-    Alert.alert(
-      'Remover aluno',
-      `Deseja remover o aluno desta turma de ${className}? Ele perderá acesso imediato.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Remover',
-          style: 'destructive',
-          onPress: () => {
-            updateEnrollmentStatus(enrollmentId, 'cancelled');
-            Alert.alert('Aluno removido', 'A inscrição foi cancelada com sucesso.');
-          },
-        },
-      ],
-    );
-  };
 
   return (
     <SafeAreaView
@@ -125,23 +86,43 @@ export default function InstructorDashboardScreen() {
         </ThemedView>
 
         <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Listas e check-in</ThemedText>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="subtitle">Listas e check-in</ThemedText>
+            <Link href="/instructor/rosters/index" asChild>
+              <Pressable style={styles.linkPill}>
+                <ThemedText type="defaultSemiBold" style={styles.linkPillText}>
+                  Ver todas as turmas
+                </ThemedText>
+              </Pressable>
+            </Link>
+          </View>
+          <ThemedText style={styles.muted}>
+            Toque em uma turma para abrir a lista de alunos em uma tela dedicada.
+          </ThemedText>
           {classRosterEntries.length === 0 && (
             <ThemedText style={styles.muted}>Cadastre aulas para acompanhar check-ins.</ThemedText>
           )}
           {classRosterEntries.map(({ trainingClass, roster }) => (
-            <ThemedView key={trainingClass.id} style={styles.rosterCard}>
-              <View style={styles.rosterHeader}>
-                <View>
-                  <ThemedText type="defaultSemiBold">{trainingClass.title}</ThemedText>
-                  <ThemedText style={styles.muted}>
-                    {trainingClass.schedule
-                      .map(
-                        (slot) =>
-                          `${slot.day} ${slot.start}-${slot.end} (${slot.startDate ?? 'agora'} a ${slot.endDate ?? 'sem data fim'})`,
-                      )
-                      .join(' · ')}
-                  </ThemedText>
+            <Link
+              key={trainingClass.id}
+              href={{ pathname: '/instructor/rosters/[classId]', params: { classId: trainingClass.id } }}
+              asChild>
+              <Pressable style={styles.rosterCard}>
+                <View style={styles.rosterHeader}>
+                  <View>
+                    <ThemedText type="defaultSemiBold">{trainingClass.title}</ThemedText>
+                    <ThemedText style={styles.muted}>
+                      {trainingClass.schedule
+                        .map(
+                          (slot) =>
+                            `${slot.day} ${slot.start}-${slot.end} (${slot.startDate ?? 'agora'} a ${slot.endDate ?? 'sem data fim'})`,
+                        )
+                        .join(' · ')}
+                    </ThemedText>
+                  </View>
+                  <ThemedView style={styles.badge}>
+                    <ThemedText style={styles.badgeText}>{roster.length} inscritos</ThemedText>
+                  </ThemedView>
                 </View>
                 <View style={styles.tagRow}>
                   {trainingClass.tags.map((tag) => (
@@ -150,54 +131,8 @@ export default function InstructorDashboardScreen() {
                     </ThemedView>
                   ))}
                 </View>
-              </View>
-
-              <View style={styles.rosterList}>
-                {roster.map((entry) => {
-                  const nextSession = sessions.find((session) => session.classId === trainingClass.id);
-                  const paymentCleared = entry.paymentStatus === 'paid';
-                  return (
-                    <View key={entry.enrollment.id} style={styles.rosterRow}>
-                      <View style={styles.rosterText}>
-                        <ThemedText type="defaultSemiBold">{entry.student.fullName}</ThemedText>
-                        <ThemedText style={styles.muted}>
-                          {entry.enrollment.status === 'waitlist' ? 'Lista de espera' : 'Confirmado'} ·
-                          {entry.paymentLabel === 'Pago'
-                            ? ' sem pendências'
-                            : ` ${entry.paymentLabel} · pagamento requerido`}
-                        </ThemedText>
-                      </View>
-                      <View style={styles.rosterActions}>
-                        <Pressable
-                          style={[styles.checkButton, styles.presentButton]}
-                          disabled={!nextSession || !paymentCleared}
-                          onPress={() =>
-                            nextSession && handleCheckIn(nextSession.id, entry.enrollment.id, 'present')
-                          }>
-                          <ThemedText style={styles.actionText}>Presente</ThemedText>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.checkButton, styles.absentButton]}
-                          disabled={!nextSession}
-                          onPress={() =>
-                            nextSession && handleCheckIn(nextSession.id, entry.enrollment.id, 'absent')
-                          }>
-                          <ThemedText style={[styles.actionText, styles.absentText]}>Falta</ThemedText>
-                        </Pressable>
-                        <Pressable
-                          style={[styles.checkButton, styles.removeButton]}
-                          onPress={() => handleDropStudent(trainingClass.id, entry.enrollment.id)}>
-                          <ThemedText style={[styles.actionText, styles.absentText]}>Remover</ThemedText>
-                        </Pressable>
-                      </View>
-                    </View>
-                  );
-                })}
-                {roster.length === 0 && (
-                  <ThemedText style={styles.muted}>Nenhum aluno inscrito ainda.</ThemedText>
-                )}
-              </View>
-            </ThemedView>
+              </Pressable>
+            </Link>
           ))}
         </ThemedView>
 
@@ -300,6 +235,15 @@ const styles = StyleSheet.create({
   badgeText: {
     color: '#0b3b5a',
   },
+  linkPill: {
+    backgroundColor: '#0e9aed',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  linkPillText: {
+    color: '#0b3b5a',
+  },
   linkButton: {
     marginTop: 6,
     paddingVertical: 12,
@@ -318,6 +262,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     gap: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
   },
   rosterHeader: {
     flexDirection: 'row',
