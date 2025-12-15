@@ -372,15 +372,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         (enrollment) => enrollment.studentId === studentId && enrollment.classId === classId,
       );
 
-      if (existing) {
-        logEvent('validation_error', 'Tentativa de inscrição duplicada bloqueada.', {
-          studentId,
-          classId,
-          enrollmentId: existing.id,
-        });
-        return { enrollment: existing, isWaitlist: existing.status === 'waitlist', alreadyEnrolled: true };
-      }
-
       const now = new Date().toISOString();
       const classInfo = classes.find((item) => item.id === classId);
       if (!classInfo) {
@@ -392,6 +383,36 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         (item) => item.classId === classId && item.status === 'active',
       ).length;
       const isWaitlist = classInfo ? activeCount >= classInfo.capacity : false;
+
+      if (existing && existing.status !== 'cancelled') {
+        logEvent('validation_error', 'Tentativa de inscrição duplicada bloqueada.', {
+          studentId,
+          classId,
+          enrollmentId: existing.id,
+        });
+        return { enrollment: existing, isWaitlist: existing.status === 'waitlist', alreadyEnrolled: true };
+      }
+
+      if (existing && existing.status === 'cancelled') {
+        const reactivated: Enrollment = {
+          ...existing,
+          status: isWaitlist ? 'waitlist' : 'active',
+          updatedAt: now,
+        };
+
+        setEnrollments((prev) =>
+          prev.map((enrollment) => (enrollment.id === existing.id ? reactivated : enrollment)),
+        );
+
+        logEvent('enrollment_created', 'Inscrição reativada após cancelamento.', {
+          enrollmentId: existing.id,
+          classId,
+          studentId,
+          waitlisted: isWaitlist,
+        });
+
+        return { enrollment: reactivated, isWaitlist, alreadyEnrolled: false };
+      }
 
       const enrollment: Enrollment = {
         id: generateId('enrollment'),

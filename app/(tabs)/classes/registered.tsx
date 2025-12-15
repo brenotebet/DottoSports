@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TopBar } from '@/components/top-bar';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { useInstructorData } from '@/providers/instructor-data-provider';
@@ -56,8 +57,9 @@ export default function RegisteredClassesScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
+      style={[styles.safeArea, { paddingTop: insets.top }]}
       edges={['left', 'right', 'bottom']}>
+      <TopBar title="Minhas aulas" fallbackHref="/(tabs)/classes" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>

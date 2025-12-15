@@ -15,8 +15,16 @@ export default function DashboardScreen() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { sessions, classes, payments, enrollments, ensureStudentProfile, getEnrollmentForStudent, recordCheckIn } =
-    useInstructorData();
+  const {
+    sessions,
+    classes,
+    payments,
+    enrollments,
+    ensureStudentProfile,
+    getEnrollmentForStudent,
+    recordCheckIn,
+    getCapacityUsage,
+  } = useInstructorData();
   const [studentId, setStudentId] = useState<string | null>(null);
   const [checkInStatus, setCheckInStatus] = useState<string | null>(null);
 
@@ -57,6 +65,11 @@ export default function DashboardScreen() {
   const sessionClass = useMemo(
     () => classes.find((item) => item.id === upcomingSession?.classId),
     [classes, upcomingSession?.classId],
+  );
+
+  const sessionCapacity = useMemo(
+    () => (upcomingSession?.classId ? getCapacityUsage(upcomingSession.classId) : null),
+    [getCapacityUsage, upcomingSession?.classId],
   );
 
   const enrollment = useMemo(() => {
@@ -137,7 +150,11 @@ export default function DashboardScreen() {
                 : 'Adicione aulas pelo catálogo.'}
           </ThemedText>
           <ThemedText type="defaultSemiBold" style={[styles.muted, styles.cardPrimaryText]}>
-            {sessionClass ? `Capacidade ${sessionClass.capacity}` : 'Nenhuma turma ativa'}
+            {sessionCapacity && sessionClass
+              ? `Capacidade ${sessionCapacity.available} / ${sessionCapacity.capacity}`
+              : sessionClass
+                ? `Capacidade ${sessionClass.capacity}`
+                : 'Nenhuma turma ativa'}
           </ThemedText>
           <View style={styles.rowActions}>
             <Link href="/(tabs)/classes" asChild>
