@@ -23,6 +23,7 @@ export default function DashboardScreen() {
     recordCheckIn,
     getCapacityUsage,
     getStudentAccountSnapshot,
+    goals,
   } = useInstructorData();
   const [studentId, setStudentId] = useState<string | null>(null);
   const [checkInStatus, setCheckInStatus] = useState<string | null>(null);
@@ -79,6 +80,14 @@ export default function DashboardScreen() {
   }, [getEnrollmentForStudent, studentId, upcomingSession]);
 
   const nextPayment = studentAccount?.nextPayment;
+
+  const activeGoals = useMemo(
+    () =>
+      goals
+        .filter((goal) => goal.studentId === studentId && goal.status === 'active')
+        .slice(0, 3),
+    [goals, studentId],
+  );
 
   const highlights = [
     { label: 'Aulas inscritas', value: `${studentEnrollments.length} turmas`, href: '/(tabs)/classes/registered' },
@@ -181,6 +190,30 @@ export default function DashboardScreen() {
           {checkInStatus ? (
             <ThemedText style={[styles.cardPrimaryText, styles.muted]}>{checkInStatus}</ThemedText>
           ) : null}
+        </ThemedView>
+
+        <ThemedView style={styles.card}>
+          <ThemedText type="subtitle">Metas em andamento</ThemedText>
+          {activeGoals.length === 0 ? (
+            <ThemedText style={styles.muted}>
+              Cadastre uma meta em Avaliações físicas para acompanhar seu progresso.
+            </ThemedText>
+          ) : (
+            <View style={styles.goalsList}>
+              {activeGoals.map((goal) => (
+                <View key={goal.id} style={styles.goalRow}>
+                  <View style={styles.goalHeader}>
+                    <ThemedText type="defaultSemiBold">{goal.target}</ThemedText>
+                    <ThemedText style={styles.muted}>{goal.metric}</ThemedText>
+                  </View>
+                  <View style={styles.progressBarBackground}>
+                    <View style={[styles.progressBarFill, { width: `${Math.min(goal.progress, 100)}%` }]} />
+                  </View>
+                  <ThemedText style={styles.muted}>{goal.progress}% concluído</ThemedText>
+                </View>
+              ))}
+            </View>
+          )}
         </ThemedView>
 
         <ThemedView style={styles.row}>
@@ -324,5 +357,30 @@ const styles = StyleSheet.create({
   highlightInteractive: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#c2d9ef',
+  },
+  goalsList: {
+    gap: 10,
+  },
+  goalRow: {
+    gap: 6,
+    paddingVertical: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.12)',
+  },
+  goalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  progressBarBackground: {
+    height: 8,
+    borderRadius: 10,
+    backgroundColor: '#dcecf9',
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 10,
+    backgroundColor: '#0e9aed',
   },
 });

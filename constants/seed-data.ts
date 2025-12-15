@@ -3,6 +3,8 @@ import type {
   ClassSession,
   DatabaseSchema,
   Enrollment,
+  Evaluation,
+  Goal,
   InstructorProfile,
   Invoice,
   Payment,
@@ -197,6 +199,46 @@ export const attendance: Attendance[] = [
   },
 ];
 
+export const evaluations: Evaluation[] = [
+  {
+    id: 'evaluation-1',
+    studentId: 'student-1',
+    date: '2024-12-01',
+    questionnaire: {
+      trainingFrequency: '4x por semana',
+      goalsFocus: 'Melhorar condicionamento e técnica de LPO',
+      mobility: 'Mobilidade de tornozelo precisa de atenção',
+      nutrition: 'Dieta 80/20 com proteína adequada',
+      sleepQuality: 'Dormindo 7h em média',
+      stressLevel: 'Moderado',
+    },
+    notes: 'Boa consciência corporal, recomenda-se progredir cargas no clean.',
+  },
+];
+
+export const goals: Goal[] = [
+  {
+    id: 'goal-1',
+    studentId: 'student-1',
+    target: 'Completar benchmark “Helen” abaixo de 11 minutos',
+    metric: 'Tempo total',
+    startDate: '2024-12-05',
+    endDate: '2025-02-05',
+    progress: 35,
+    status: 'active',
+  },
+  {
+    id: 'goal-2',
+    studentId: 'student-1',
+    target: 'Atingir 1.25x BW no back squat',
+    metric: 'Carga máxima',
+    startDate: '2024-11-15',
+    endDate: '2025-03-01',
+    progress: 55,
+    status: 'active',
+  },
+];
+
 export const payments: Payment[] = [
   {
     id: 'payment-1',
@@ -287,6 +329,8 @@ export const seededDatabase: DatabaseSchema = {
   paymentIntents,
   paymentSessions,
   settlements,
+  evaluations,
+  goals,
 };
 
 export const resolveSeedRole = (email: string): UserRole | null => {
