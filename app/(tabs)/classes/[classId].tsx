@@ -114,7 +114,12 @@ export default function ClassDetailsScreen() {
             </View>
           </View>
           <ThemedText style={styles.muted}>
-            {trainingClass.schedule.map((slot) => `${slot.day} ${slot.start}-${slot.end} · ${slot.location}`).join('  •  ')}
+            {trainingClass.schedule
+              .map(
+                (slot) =>
+                  `${slot.day} ${slot.start}-${slot.end} · ${slot.location} (${slot.startDate ?? 'início imediato'} até ${slot.endDate ?? 'sem data final'})`,
+              )
+              .join('  •  ')}
           </ThemedText>
         </ThemedView>
 

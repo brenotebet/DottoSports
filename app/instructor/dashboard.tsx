@@ -134,7 +134,12 @@ export default function InstructorDashboardScreen() {
                 <View>
                   <ThemedText type="defaultSemiBold">{trainingClass.title}</ThemedText>
                   <ThemedText style={styles.muted}>
-                    {trainingClass.schedule.map((slot) => `${slot.day} ${slot.start}-${slot.end}`).join(' · ')}
+                    {trainingClass.schedule
+                      .map(
+                        (slot) =>
+                          `${slot.day} ${slot.start}-${slot.end} (${slot.startDate ?? 'agora'} a ${slot.endDate ?? 'sem data fim'})`,
+                      )
+                      .join(' · ')}
                   </ThemedText>
                 </View>
                 <View style={styles.tagRow}>

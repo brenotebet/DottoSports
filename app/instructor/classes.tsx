@@ -4,7 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { ClassSession, TrainingClass } from '@/constants/schema';
+import { TrainingClass } from '@/constants/schema';
 import { Colors } from '@/constants/theme';
 import { TopBar } from '@/components/top-bar';
 import { useInstructorData } from '@/providers/instructor-data-provider';
@@ -19,18 +19,48 @@ type ClassFormState = {
   scheduleStart: string;
   scheduleEnd: string;
   scheduleLocation: string;
+  scheduleStartDate: string;
+  scheduleEndDate: string;
   tags: string;
 };
 
-type SessionFormState = {
-  classId: string;
-  startTime: string;
-  endTime: string;
-  location: string;
-  capacity: string;
-  tags: string;
-  coachNotes?: string;
+const weekDayOptions = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+const formatDateInput = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const addDays = (date: Date, days: number) => {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
 };
+
+const generateTimeSlots = (startHour = 6, endHour = 22, stepMinutes = 30) => {
+  const slots: string[] = [];
+  for (let hour = startHour; hour <= endHour; hour++) {
+    for (let minute = 0; minute < 60; minute += stepMinutes) {
+      if (hour === endHour && minute > 0) continue;
+      slots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+    }
+  }
+  return slots;
+};
+
+const timeToMinutes = (time: string) => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+const isOverlapping = (startA: string, endA: string, startB: string, endB: string) => {
+  const aStart = timeToMinutes(startA);
+  const aEnd = timeToMinutes(endA);
+  const bStart = timeToMinutes(startB);
+  const bEnd = timeToMinutes(endB);
+  return aStart < bEnd && bStart < aEnd;
+};
+
+const defaultDateStart = formatDateInput(new Date());
+const defaultDateEnd = formatDateInput(addDays(new Date(), 45));
 
 const defaultClassForm: ClassFormState = {
   title: '',
@@ -42,52 +72,111 @@ const defaultClassForm: ClassFormState = {
   scheduleStart: '07:00',
   scheduleEnd: '08:00',
   scheduleLocation: 'Área principal',
+  scheduleStartDate: defaultDateStart,
+  scheduleEndDate: defaultDateEnd,
   tags: 'metcon, iniciantes',
 };
 
-const defaultSessionForm: SessionFormState = {
-  classId: '',
-  startTime: '2024-12-15T18:00:00Z',
-  endTime: '2024-12-15T19:00:00Z',
-  location: 'Área principal',
-  capacity: '12',
-  tags: 'monitorar check-in',
-  coachNotes: 'Sincronizar progressões e escalações.',
+const createDefaultClassForm = (): ClassFormState => ({
+  ...defaultClassForm,
+  scheduleStartDate: formatDateInput(new Date()),
+  scheduleEndDate: formatDateInput(addDays(new Date(), 45)),
+});
+
+type DropdownFieldProps = {
+  label: string;
+  value: string;
+  options: string[];
+  onSelect: (value: string) => void;
 };
 
+function DropdownField({ label, value, options, onSelect }: DropdownFieldProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={styles.dropdownWrapper}>
+      <ThemedText style={styles.dropdownLabel}>{label}</ThemedText>
+      <Pressable style={styles.dropdown} onPress={() => setOpen((prev) => !prev)}>
+        <ThemedText>{value || 'Selecionar'}</ThemedText>
+        <ThemedText style={styles.dropdownCaret}>{open ? '▴' : '▾'}</ThemedText>
+      </Pressable>
+      {open && (
+        <ThemedView style={styles.dropdownList}>
+          <ScrollView style={{ maxHeight: 180 }}>
+            {options.map((option) => (
+              <Pressable
+                key={option}
+                style={[styles.dropdownOption, option === value && styles.dropdownOptionActive]}
+                onPress={() => {
+                  onSelect(option);
+                  setOpen(false);
+                }}>
+                <ThemedText type="defaultSemiBold">{option}</ThemedText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </ThemedView>
+      )}
+    </View>
+  );
+}
+
 export default function InstructorClassesScreen() {
-  const {
-    classes,
-    sessions,
-    createClass,
-    updateClass,
-    deleteClass,
-    createSession,
-    updateSession,
-    deleteSession,
-  } = useInstructorData();
+  const { classes, createClass, updateClass, deleteClass } = useInstructorData();
   const insets = useSafeAreaInsets();
 
-  const [classForm, setClassForm] = useState<ClassFormState>(defaultClassForm);
-  const [sessionForm, setSessionForm] = useState<SessionFormState>({
-    ...defaultSessionForm,
-    classId: classes[0]?.id ?? '',
-  });
+  const [classForm, setClassForm] = useState<ClassFormState>(() => createDefaultClassForm());
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [classErrors, setClassErrors] = useState<Partial<Record<keyof ClassFormState, string>>>({});
-  const [sessionErrors, setSessionErrors] = useState<Partial<Record<keyof SessionFormState, string>>>({});
+  const timeOptions = useMemo(() => generateTimeSlots(), []);
+  const occupiedIntervals = useMemo(
+    () =>
+      classes
+        .filter((item) => item.schedule[0] && item.id !== editingClassId)
+        .flatMap((item) =>
+          item.schedule
+            .filter((slot) => slot.day === classForm.scheduleDay)
+            .map((slot) => ({ start: slot.start, end: slot.end })),
+        ),
+    [classes, classForm.scheduleDay, editingClassId],
+  );
+  const availableStartTimes = useMemo(
+    () =>
+      timeOptions.filter((time) =>
+        occupiedIntervals.every(
+          (interval) =>
+            timeToMinutes(time) < timeToMinutes(interval.start) ||
+            timeToMinutes(time) >= timeToMinutes(interval.end),
+        ),
+      ),
+    [occupiedIntervals, timeOptions],
+  );
+  const availableEndTimes = useMemo(() => {
+    if (!classForm.scheduleStart) return [];
+    const startMinutes = timeToMinutes(classForm.scheduleStart);
+
+    return timeOptions.filter((time) => {
+      const candidateMinutes = timeToMinutes(time);
+      if (candidateMinutes <= startMinutes) return false;
+      return occupiedIntervals.every(
+        (interval) => !isOverlapping(classForm.scheduleStart, time, interval.start, interval.end),
+      );
+    });
+  }, [classForm.scheduleStart, occupiedIntervals, timeOptions]);
 
   useEffect(() => {
-    if (!sessionForm.classId && classes[0]) {
-      setSessionForm((prev) => ({ ...prev, classId: classes[0].id }));
+    if (availableStartTimes.length === 0) return;
+    if (!availableStartTimes.includes(classForm.scheduleStart)) {
+      setClassForm((prev) => ({ ...prev, scheduleStart: availableStartTimes[0], scheduleEnd: '' }));
     }
-  }, [classes, sessionForm.classId]);
+  }, [availableStartTimes, classForm.scheduleStart]);
 
-  const sortedSessions = useMemo(
-    () => [...sessions].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
-    [sessions],
-  );
+  useEffect(() => {
+    if (availableEndTimes.length === 0) return;
+    if (!availableEndTimes.includes(classForm.scheduleEnd)) {
+      setClassForm((prev) => ({ ...prev, scheduleEnd: availableEndTimes[0] }));
+    }
+  }, [availableEndTimes, classForm.scheduleEnd]);
 
   const confirmAction = (title: string, message: string, onConfirm: () => void) => {
     Alert.alert(title, message, [
@@ -115,10 +204,24 @@ export default function InstructorClassesScreen() {
 
     if (!classForm.scheduleStart.trim() || !classForm.scheduleEnd.trim()) {
       errors.scheduleStart = 'Horários de início e fim são obrigatórios.';
+    } else if (timeToMinutes(classForm.scheduleEnd) <= timeToMinutes(classForm.scheduleStart)) {
+      errors.scheduleEnd = 'O fim deve ser depois do início.';
+    } else if (
+      occupiedIntervals.some((interval) =>
+        isOverlapping(classForm.scheduleStart, classForm.scheduleEnd, interval.start, interval.end),
+      )
+    ) {
+      errors.scheduleStart = 'Escolha um horário que não conflite com outra aula.';
     }
 
     if (!classForm.scheduleLocation.trim()) {
       errors.scheduleLocation = 'Defina um local para a aula.';
+    }
+
+    if (!classForm.scheduleStartDate.trim() || !classForm.scheduleEndDate.trim()) {
+      errors.scheduleStartDate = 'Informe o período em que a aula ficará ativa.';
+    } else if (new Date(classForm.scheduleEndDate) < new Date(classForm.scheduleStartDate)) {
+      errors.scheduleEndDate = 'A data final deve ser após a data inicial.';
     }
 
     setClassErrors(errors);
@@ -144,6 +247,8 @@ export default function InstructorClassesScreen() {
           start: classForm.scheduleStart,
           end: classForm.scheduleEnd,
           location: classForm.scheduleLocation,
+          startDate: classForm.scheduleStartDate,
+          endDate: classForm.scheduleEndDate,
         },
       ],
       tags: classForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
@@ -165,7 +270,7 @@ export default function InstructorClassesScreen() {
         Alert.alert('Nova aula criada', 'A aula foi cadastrada com sucesso.');
       }
 
-      setClassForm(defaultClassForm);
+      setClassForm(createDefaultClassForm());
       setClassErrors({});
       setEditingClassId(null);
     });
@@ -185,6 +290,8 @@ export default function InstructorClassesScreen() {
       scheduleStart: target.schedule[0]?.start ?? '07:00',
       scheduleEnd: target.schedule[0]?.end ?? '08:00',
       scheduleLocation: target.schedule[0]?.location ?? 'Box',
+      scheduleStartDate: target.schedule[0]?.startDate ?? defaultDateStart,
+      scheduleEndDate: target.schedule[0]?.endDate ?? defaultDateEnd,
       tags: target.tags.join(', '),
     });
     setClassErrors({});
@@ -205,114 +312,21 @@ export default function InstructorClassesScreen() {
     ]);
   };
 
-  const validateSessionForm = () => {
-    const errors: Partial<Record<keyof SessionFormState, string>> = {};
-
-    if (!sessionForm.classId.trim()) {
-      errors.classId = 'Informe o ID da aula.';
-    }
-
-    if (!sessionForm.startTime.trim() || !sessionForm.endTime.trim()) {
-      errors.startTime = 'Início e fim são obrigatórios.';
-    } else if (new Date(sessionForm.endTime) <= new Date(sessionForm.startTime)) {
-      errors.endTime = 'O fim deve ser depois do início.';
-    }
-
-    if (!sessionForm.capacity.trim()) {
-      errors.capacity = 'Capacidade é obrigatória.';
-    } else if (Number.isNaN(Number(sessionForm.capacity)) || Number(sessionForm.capacity) <= 0) {
-      errors.capacity = 'Use um número maior que zero.';
-    }
-
-    if (!sessionForm.location.trim()) {
-      errors.location = 'Local não pode ficar vazio.';
-    }
-
-    setSessionErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSubmitSession = () => {
-    const isValid = validateSessionForm();
-    if (!isValid) {
-      Alert.alert('Revise os campos', 'Corrija os destaques antes de salvar a sessão.');
-      return;
-    }
-
-    const payload: Omit<ClassSession, 'id'> = {
-      classId: sessionForm.classId,
-      startTime: sessionForm.startTime,
-      endTime: sessionForm.endTime,
-      location: sessionForm.location,
-      capacity: Number(sessionForm.capacity),
-      tags: sessionForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-      coachNotes: sessionForm.coachNotes,
-    };
-
-    const isEditing = Boolean(editingSessionId);
-    const promptTitle = isEditing ? 'Atualizar sessão' : 'Criar sessão';
-    const promptMessage = isEditing
-      ? 'Deseja salvar as alterações desta sessão?'
-      : 'Deseja criar esta nova sessão?';
-
-    confirmAction(promptTitle, promptMessage, () => {
-      if (editingSessionId) {
-        updateSession(editingSessionId, payload);
-        Alert.alert('Sessão atualizada', 'A sessão foi atualizada com sucesso.');
-      } else {
-        createSession(payload);
-        Alert.alert('Sessão criada', 'A nova sessão foi agendada.');
-      }
-
-      setSessionForm({ ...defaultSessionForm, classId: classes[0]?.id ?? '' });
-      setSessionErrors({});
-      setEditingSessionId(null);
-    });
-  };
-
-  const handleEditSession = (id: string) => {
-    const target = sessions.find((item) => item.id === id);
-    if (!target) return;
-
-    setSessionForm({
-      classId: target.classId,
-      startTime: target.startTime,
-      endTime: target.endTime,
-      location: target.location,
-      capacity: String(target.capacity),
-      tags: target.tags?.join(', ') ?? '',
-      coachNotes: target.coachNotes,
-    });
-    setSessionErrors({});
-    setEditingSessionId(id);
-  };
-
-  const handleRemoveSession = (id: string) => {
-    Alert.alert('Excluir sessão', 'Deseja remover esta sessão da agenda?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Remover',
-        style: 'destructive',
-        onPress: () => {
-          deleteSession(id);
-          Alert.alert('Sessão removida', 'A sessão saiu da agenda.');
-        },
-      },
-    ]);
-  };
-
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
       edges={['top', 'left', 'right', 'bottom']}>
-      <TopBar title="Aulas e sessões" />
+      <TopBar title="Aulas" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
-          Aulas e sessões
+          Aulas recorrentes
         </ThemedText>
 
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Cadastrar ou editar aula</ThemedText>
+          <ThemedText style={styles.muted}>
+            Use os horários disponíveis para evitar conflitos com outras turmas e defina um período de vigência.
+          </ThemedText>
           <View style={styles.formRow}>
             <TextInput
               style={styles.input}
@@ -338,28 +352,47 @@ export default function InstructorClassesScreen() {
             onChangeText={(text) => setClassForm((prev) => ({ ...prev, description: text }))}
           />
           <View style={styles.formRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="Dia (ex: Seg)"
+            <DropdownField
+              label="Dia da semana"
               value={classForm.scheduleDay}
-              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleDay: text }))}
+              options={weekDayOptions}
+              onSelect={(day) => setClassForm((prev) => ({ ...prev, scheduleDay: day }))}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Início"
+            <DropdownField
+              label="Horário de início"
               value={classForm.scheduleStart}
-              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleStart: text }))}
+              options={availableStartTimes}
+              onSelect={(start) => setClassForm((prev) => ({ ...prev, scheduleStart: start }))}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Fim"
+            <DropdownField
+              label="Horário de término"
               value={classForm.scheduleEnd}
-              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleEnd: text }))}
+              options={availableEndTimes}
+              onSelect={(end) => setClassForm((prev) => ({ ...prev, scheduleEnd: end }))}
             />
           </View>
           {(classErrors.scheduleDay || classErrors.scheduleStart || classErrors.scheduleEnd) && (
             <ThemedText style={styles.errorText}>
               {classErrors.scheduleDay ?? classErrors.scheduleStart ?? classErrors.scheduleEnd}
+            </ThemedText>
+          )}
+          <View style={styles.formRow}>
+            <TextInput
+              style={styles.input}
+              placeholder="Data inicial (YYYY-MM-DD)"
+              value={classForm.scheduleStartDate}
+              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleStartDate: text }))}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Data final (YYYY-MM-DD)"
+              value={classForm.scheduleEndDate}
+              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleEndDate: text }))}
+            />
+          </View>
+          {(classErrors.scheduleStartDate || classErrors.scheduleEndDate) && (
+            <ThemedText style={styles.errorText}>
+              {classErrors.scheduleStartDate ?? classErrors.scheduleEndDate}
             </ThemedText>
           )}
           <TextInput
@@ -368,7 +401,9 @@ export default function InstructorClassesScreen() {
             value={classForm.scheduleLocation}
             onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleLocation: text }))}
           />
-          {classErrors.scheduleLocation && <ThemedText style={styles.errorText}>{classErrors.scheduleLocation}</ThemedText>}
+          {classErrors.scheduleLocation && (
+            <ThemedText style={styles.errorText}>{classErrors.scheduleLocation}</ThemedText>
+          )}
           <TextInput
             style={styles.input}
             placeholder="Tags separadas por vírgula"
@@ -402,7 +437,12 @@ export default function InstructorClassesScreen() {
                     {trainingClass.category} · {trainingClass.level} · Capacidade {trainingClass.capacity}
                   </ThemedText>
                   <ThemedText style={styles.muted}>
-                    {trainingClass.schedule.map((slot) => `${slot.day} ${slot.start}-${slot.end}`).join(' · ')}
+                    {trainingClass.schedule
+                      .map(
+                        (slot) =>
+                          `${slot.day} ${slot.start}-${slot.end} · ${slot.startDate ?? 'início imediato'} a ${slot.endDate ?? 'sem data final'}`,
+                      )
+                      .join(' · ')}
                   </ThemedText>
                   <View style={styles.tagRow}>
                     {trainingClass.tags.map((tag) => (
@@ -434,120 +474,6 @@ export default function InstructorClassesScreen() {
           </View>
         </ThemedView>
 
-        <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Agendar sessão</ThemedText>
-          <View style={styles.formRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="ID da aula"
-              value={sessionForm.classId}
-              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, classId: text }))}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Capacidade"
-              keyboardType="numeric"
-              value={sessionForm.capacity}
-              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, capacity: text }))}
-            />
-          </View>
-          {(sessionErrors.classId || sessionErrors.capacity) && (
-            <ThemedText style={styles.errorText}>{sessionErrors.classId ?? sessionErrors.capacity}</ThemedText>
-          )}
-            <TextInput
-              style={styles.input}
-              placeholder="Início (ISO)"
-              value={sessionForm.startTime}
-              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, startTime: text }))}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Fim (ISO)"
-              value={sessionForm.endTime}
-              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, endTime: text }))}
-            />
-          {(sessionErrors.startTime || sessionErrors.endTime) && (
-            <ThemedText style={styles.errorText}>{sessionErrors.startTime ?? sessionErrors.endTime}</ThemedText>
-          )}
-          <TextInput
-            style={styles.input}
-            placeholder="Local"
-            value={sessionForm.location}
-            onChangeText={(text) => setSessionForm((prev) => ({ ...prev, location: text }))}
-          />
-          {sessionErrors.location && <ThemedText style={styles.errorText}>{sessionErrors.location}</ThemedText>}
-          <TextInput
-            style={styles.input}
-            placeholder="Tags da sessão"
-            value={sessionForm.tags}
-            onChangeText={(text) => setSessionForm((prev) => ({ ...prev, tags: text }))}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Notas do coach"
-            value={sessionForm.coachNotes}
-            onChangeText={(text) => setSessionForm((prev) => ({ ...prev, coachNotes: text }))}
-          />
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.primaryButton} onPress={handleSubmitSession}>
-              <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
-                {editingSessionId ? 'Atualizar sessão' : 'Criar sessão'}
-              </ThemedText>
-            </Pressable>
-            {editingSessionId && (
-              <Pressable style={styles.secondaryButton} onPress={() => setEditingSessionId(null)}>
-                <ThemedText type="defaultSemiBold" style={styles.secondaryButtonText}>
-                  Cancelar edição
-                </ThemedText>
-              </Pressable>
-            )}
-          </View>
-        </ThemedView>
-
-        <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Próximas sessões</ThemedText>
-          <View style={styles.list}>
-            {sortedSessions.map((session) => {
-              const sessionClass = classes.find((item) => item.id === session.classId);
-              return (
-                <ThemedView key={session.id} style={styles.listItem}>
-                  <View style={styles.listText}>
-                    <ThemedText type="defaultSemiBold">{sessionClass?.title ?? session.classId}</ThemedText>
-                    <ThemedText style={styles.muted}>
-                      {new Date(session.startTime).toLocaleString('pt-BR', {
-                        weekday: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}{' '}
-                      · {session.location}
-                    </ThemedText>
-                    <ThemedText style={styles.muted}>
-                      Capacidade {session.capacity} · {session.tags?.join(', ')}
-                    </ThemedText>
-                    {session.coachNotes && <ThemedText style={styles.muted}>{session.coachNotes}</ThemedText>}
-                  </View>
-                  <View style={styles.actionColumn}>
-                    <Pressable style={styles.linkButton} onPress={() => handleEditSession(session.id)}>
-                      <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
-                        Editar
-                      </ThemedText>
-                    </Pressable>
-                    <Pressable
-                      style={styles.destructiveButton}
-                      onPress={() => handleRemoveSession(session.id)}>
-                      <ThemedText type="defaultSemiBold" style={styles.destructiveButtonText}>
-                        Remover
-                      </ThemedText>
-                    </Pressable>
-                  </View>
-                </ThemedView>
-              );
-            })}
-            {sortedSessions.length === 0 && (
-              <ThemedText style={styles.muted}>Nenhuma sessão agendada. Programe datas para suas aulas.</ThemedText>
-            )}
-          </View>
-        </ThemedView>
       </ScrollView>
     </SafeAreaView>
   );
@@ -577,6 +503,45 @@ const styles = StyleSheet.create({
     gap: 10,
     flexWrap: 'wrap',
     alignItems: 'flex-start',
+  },
+  dropdownWrapper: {
+    flex: 1,
+    minWidth: 140,
+    gap: 6,
+  },
+  dropdownLabel: {
+    opacity: 0.7,
+  },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+  },
+  dropdownCaret: {
+    opacity: 0.6,
+  },
+  dropdownList: {
+    marginTop: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: '#fff',
+  },
+  dropdownOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  dropdownOptionActive: {
+    backgroundColor: '#dff1ff',
   },
   input: {
     flex: 1,

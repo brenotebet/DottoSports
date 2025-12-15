@@ -53,6 +53,8 @@ export type TrainingClass = {
     start: string;
     end: string;
     location: string;
+    startDate?: string;
+    endDate?: string;
   }>;
   tags: string[];
   instructorId: string;
