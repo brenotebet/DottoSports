@@ -91,7 +91,7 @@ export default function ClassDetailsScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea ,{paddingTop: insets.top + 12}]} edges={['left', 'right', 'bottom']}>
-      <TopBar title="Detalhes da aula" />
+      <TopBar title="Detalhes da aula" fallbackHref="/calendar" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           {trainingClass.title}
@@ -114,7 +114,12 @@ export default function ClassDetailsScreen() {
             </View>
           </View>
           <ThemedText style={styles.muted}>
-            {trainingClass.schedule.map((slot) => `${slot.day} ${slot.start}-${slot.end} · ${slot.location}`).join('  •  ')}
+            {trainingClass.schedule
+              .map(
+                (slot) =>
+                  `${slot.day} ${slot.start}-${slot.end} · ${slot.location} (${slot.startDate ?? 'início imediato'} até ${slot.endDate ?? 'sem data final'})`,
+              )
+              .join('  •  ')}
           </ThemedText>
         </ThemedView>
 

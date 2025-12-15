@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { ClassSession, TrainingClass } from '@/constants/schema';
+import { TrainingClass } from '@/constants/schema';
 import { Colors } from '@/constants/theme';
 import { TopBar } from '@/components/top-bar';
 import { useInstructorData } from '@/providers/instructor-data-provider';
+import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 
 type ClassFormState = {
   title: string;
@@ -19,18 +20,58 @@ type ClassFormState = {
   scheduleStart: string;
   scheduleEnd: string;
   scheduleLocation: string;
+  scheduleStartDate: string;
+  scheduleEndDate: string;
   tags: string;
+  instructorId: string;
 };
 
-type SessionFormState = {
-  classId: string;
-  startTime: string;
-  endTime: string;
-  location: string;
-  capacity: string;
-  tags: string;
-  coachNotes?: string;
+const weekDayOptions = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+const dateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const formatDateInput = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const parseDateOnly = (value?: string | null) => {
+  if (!value) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
 };
+
+const addDays = (date: Date, days: number) => {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+};
+
+const generateTimeSlots = (startHour = 6, endHour = 22, stepMinutes = 30) => {
+  const slots: string[] = [];
+  for (let hour = startHour; hour <= endHour; hour++) {
+    for (let minute = 0; minute < 60; minute += stepMinutes) {
+      if (hour === endHour && minute > 0) continue;
+      slots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+    }
+  }
+  return slots;
+};
+
+const timeToMinutes = (time: string) => {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+const isOverlapping = (startA: string, endA: string, startB: string, endB: string) => {
+  const aStart = timeToMinutes(startA);
+  const aEnd = timeToMinutes(endA);
+  const bStart = timeToMinutes(startB);
+  const bEnd = timeToMinutes(endB);
+  return aStart < bEnd && bStart < aEnd;
+};
+
+const defaultDateStart = formatDateInput(new Date());
+const defaultDateEnd = formatDateInput(addDays(new Date(), 45));
 
 const defaultClassForm: ClassFormState = {
   title: '',
@@ -42,51 +83,246 @@ const defaultClassForm: ClassFormState = {
   scheduleStart: '07:00',
   scheduleEnd: '08:00',
   scheduleLocation: 'Área principal',
+  scheduleStartDate: defaultDateStart,
+  scheduleEndDate: defaultDateEnd,
   tags: 'metcon, iniciantes',
+  instructorId: instructorProfiles[0]?.id ?? 'instructor-1',
 };
 
-const defaultSessionForm: SessionFormState = {
-  classId: '',
-  startTime: '2024-12-15T18:00:00Z',
-  endTime: '2024-12-15T19:00:00Z',
-  location: 'Área principal',
-  capacity: '12',
-  tags: 'monitorar check-in',
-  coachNotes: 'Sincronizar progressões e escalações.',
+const createDefaultClassForm = (): ClassFormState => ({
+  ...defaultClassForm,
+  scheduleStartDate: formatDateInput(new Date()),
+  scheduleEndDate: formatDateInput(addDays(new Date(), 45)),
+});
+
+type DropdownFieldProps = {
+  label: string;
+  value: string;
+  options: { label: string; value: string }[];
+  onSelect: (value: string) => void;
 };
+
+function DropdownField({ label, value, options, onSelect }: DropdownFieldProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={styles.dropdownWrapper}>
+      <ThemedText style={styles.dropdownLabel}>{label}</ThemedText>
+      <Pressable style={styles.dropdown} onPress={() => setOpen((prev) => !prev)}>
+        <ThemedText>{options.find((option) => option.value === value)?.label || 'Selecionar'}</ThemedText>
+        <ThemedText style={styles.dropdownCaret}>{open ? '▴' : '▾'}</ThemedText>
+      </Pressable>
+      {open && (
+        <ThemedView style={styles.dropdownList}>
+          <ScrollView style={{ maxHeight: 180 }}>
+            {options.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[styles.dropdownOption, option.value === value && styles.dropdownOptionActive]}
+                onPress={() => {
+                  onSelect(option.value);
+                  setOpen(false);
+                }}>
+                <ThemedText type="defaultSemiBold">{option.label}</ThemedText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </ThemedView>
+      )}
+    </View>
+  );
+}
+
+const coachOptions = seedAccounts
+  .filter((account) => account.role === 'INSTRUCTOR')
+  .map((account) => {
+    const instructorProfile = instructorProfiles.find((profile) => profile.userId === account.id);
+    return {
+      id: instructorProfile?.id ?? account.id,
+      label: instructorProfile?.fullName ?? account.displayName ?? account.email,
+    };
+  });
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+type DateRangeCalendarProps = {
+  startDate: string;
+  endDate: string;
+  onChange: (start: string, end: string) => void;
+};
+
+function DateRangeCalendar({ startDate, endDate, onChange }: DateRangeCalendarProps) {
+  const initialVisibleMonth = parseDateOnly(startDate) ?? new Date();
+  const [visibleMonth, setVisibleMonth] = useState(
+    new Date(initialVisibleMonth.getFullYear(), initialVisibleMonth.getMonth(), 1),
+  );
+
+  const parsedStart = parseDateOnly(startDate);
+  const parsedEnd = parseDateOnly(endDate);
+
+  const daysInMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate();
+  const startOffset = (visibleMonth.getDay() + 6) % 7;
+  const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+
+  const handleSelectDate = (day: number) => {
+    const selectedDate = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
+
+    if (!parsedStart || (parsedStart && parsedEnd)) {
+      onChange(formatDateInput(selectedDate), '');
+      return;
+    }
+
+    if (selectedDate < parsedStart) {
+      onChange(formatDateInput(selectedDate), formatDateInput(parsedStart));
+      return;
+    }
+
+    onChange(formatDateInput(parsedStart), formatDateInput(selectedDate));
+  };
+
+  const renderDayCell = (cellDate: Date | null, index: number) => {
+    if (!cellDate) {
+      return <View key={`empty-${index}`} style={[styles.dayCell, styles.dayCellEmpty]} />;
+    }
+
+    const isStart = parsedStart && isSameDay(cellDate, parsedStart);
+    const isEnd = parsedEnd && isSameDay(cellDate, parsedEnd);
+    const isInRange =
+      parsedStart && parsedEnd && cellDate > parsedStart && cellDate < parsedEnd;
+
+    const isSelected = isStart || isEnd;
+
+    return (
+      <Pressable
+        key={dateKey(cellDate)}
+        style={[
+          styles.dayCell,
+          (isSelected || isInRange) && styles.rangeCell,
+          isSelected && styles.rangeEdge,
+        ]}
+        onPress={() => handleSelectDate(cellDate.getDate())}>
+        <ThemedText
+          type="defaultSemiBold"
+          style={[(isSelected || isInRange) && styles.rangeCellText, isSelected && styles.rangeEdgeText]}>
+          {cellDate.getDate()}
+        </ThemedText>
+      </Pressable>
+    );
+  };
+
+  const calendarCells = useMemo(() => {
+    return Array.from({ length: totalCells }).map((_, index) => {
+      const dayNumber = index - startOffset + 1;
+      if (dayNumber < 1 || dayNumber > daysInMonth) {
+        return null;
+      }
+      return new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), dayNumber);
+    });
+  }, [daysInMonth, startOffset, totalCells, visibleMonth]);
+
+  const monthNames = [
+    'janeiro',
+    'fevereiro',
+    'março',
+    'abril',
+    'maio',
+    'junho',
+    'julho',
+    'agosto',
+    'setembro',
+    'outubro',
+    'novembro',
+    'dezembro',
+  ];
+
+  return (
+    <View style={styles.rangePicker}>
+      <View style={styles.monthHeader}>
+        <Pressable onPress={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))} style={styles.monthButton}>
+          <ThemedText type="defaultSemiBold">‹</ThemedText>
+        </Pressable>
+        <ThemedText type="defaultSemiBold" style={styles.monthTitle}>
+          {monthNames[visibleMonth.getMonth()]} {visibleMonth.getFullYear()}
+        </ThemedText>
+        <Pressable onPress={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))} style={styles.monthButton}>
+          <ThemedText type="defaultSemiBold">›</ThemedText>
+        </Pressable>
+      </View>
+
+      <View style={styles.weekRow}>
+        {weekDayOptions.map((day) => (
+          <ThemedText key={`week-${day}`} style={[styles.weekDay, styles.muted]}>
+            {day}
+          </ThemedText>
+        ))}
+      </View>
+
+      <View style={styles.grid}>{calendarCells.map(renderDayCell)}</View>
+    </View>
+  );
+}
 
 export default function InstructorClassesScreen() {
-  const {
-    classes,
-    sessions,
-    createClass,
-    updateClass,
-    deleteClass,
-    createSession,
-    updateSession,
-    deleteSession,
-  } = useInstructorData();
+  const { classes, createClass, updateClass, deleteClass } = useInstructorData();
   const insets = useSafeAreaInsets();
 
-  const [classForm, setClassForm] = useState<ClassFormState>(defaultClassForm);
-  const [sessionForm, setSessionForm] = useState<SessionFormState>({
-    ...defaultSessionForm,
-    classId: classes[0]?.id ?? '',
-  });
+  const [classForm, setClassForm] = useState<ClassFormState>(() => createDefaultClassForm());
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [classErrors, setClassErrors] = useState<Partial<Record<keyof ClassFormState, string>>>({});
-  const [sessionErrors, setSessionErrors] = useState<Partial<Record<keyof SessionFormState, string>>>({});
+  const timeOptions = useMemo(() => generateTimeSlots(), []);
+  const occupiedIntervals = useMemo(
+    () =>
+      classes
+        .filter((item) => item.schedule[0] && item.id !== editingClassId)
+        .flatMap((item) =>
+          item.schedule
+            .filter((slot) => slot.day === classForm.scheduleDay)
+            .map((slot) => ({ start: slot.start, end: slot.end })),
+        ),
+    [classes, classForm.scheduleDay, editingClassId],
+  );
+  const availableStartTimes = useMemo(
+    () =>
+      timeOptions.filter((time) =>
+        occupiedIntervals.every(
+          (interval) =>
+            timeToMinutes(time) < timeToMinutes(interval.start) ||
+            timeToMinutes(time) >= timeToMinutes(interval.end),
+        ),
+      ),
+    [occupiedIntervals, timeOptions],
+  );
+  const availableEndTimes = useMemo(() => {
+    if (!classForm.scheduleStart) return [];
+    const startMinutes = timeToMinutes(classForm.scheduleStart);
+
+    return timeOptions.filter((time) => {
+      const candidateMinutes = timeToMinutes(time);
+      if (candidateMinutes <= startMinutes) return false;
+      return occupiedIntervals.every(
+        (interval) => !isOverlapping(classForm.scheduleStart, time, interval.start, interval.end),
+      );
+    });
+  }, [classForm.scheduleStart, occupiedIntervals, timeOptions]);
 
   useEffect(() => {
-    if (!sessionForm.classId && classes[0]) {
-      setSessionForm((prev) => ({ ...prev, classId: classes[0].id }));
+    if (availableStartTimes.length === 0) return;
+    if (!availableStartTimes.includes(classForm.scheduleStart)) {
+      setClassForm((prev) => ({ ...prev, scheduleStart: availableStartTimes[0], scheduleEnd: '' }));
     }
-  }, [classes, sessionForm.classId]);
+  }, [availableStartTimes, classForm.scheduleStart]);
 
-  const sortedSessions = useMemo(
-    () => [...sessions].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
-    [sessions],
+  useEffect(() => {
+    if (availableEndTimes.length === 0) return;
+    if (!availableEndTimes.includes(classForm.scheduleEnd)) {
+      setClassForm((prev) => ({ ...prev, scheduleEnd: availableEndTimes[0] }));
+    }
+  }, [availableEndTimes, classForm.scheduleEnd]);
+
+  const coachNameForId = useCallback(
+    (id?: string) => coachOptions.find((coach) => coach.id === id)?.label ?? 'Coach',
+    [],
   );
 
   const confirmAction = (title: string, message: string, onConfirm: () => void) => {
@@ -115,10 +351,24 @@ export default function InstructorClassesScreen() {
 
     if (!classForm.scheduleStart.trim() || !classForm.scheduleEnd.trim()) {
       errors.scheduleStart = 'Horários de início e fim são obrigatórios.';
+    } else if (timeToMinutes(classForm.scheduleEnd) <= timeToMinutes(classForm.scheduleStart)) {
+      errors.scheduleEnd = 'O fim deve ser depois do início.';
+    } else if (
+      occupiedIntervals.some((interval) =>
+        isOverlapping(classForm.scheduleStart, classForm.scheduleEnd, interval.start, interval.end),
+      )
+    ) {
+      errors.scheduleStart = 'Escolha um horário que não conflite com outra aula.';
     }
 
     if (!classForm.scheduleLocation.trim()) {
       errors.scheduleLocation = 'Defina um local para a aula.';
+    }
+
+    if (!classForm.scheduleStartDate.trim() || !classForm.scheduleEndDate.trim()) {
+      errors.scheduleStartDate = 'Informe o período em que a aula ficará ativa.';
+    } else if (new Date(classForm.scheduleEndDate) < new Date(classForm.scheduleStartDate)) {
+      errors.scheduleEndDate = 'A data final deve ser após a data inicial.';
     }
 
     setClassErrors(errors);
@@ -144,10 +394,12 @@ export default function InstructorClassesScreen() {
           start: classForm.scheduleStart,
           end: classForm.scheduleEnd,
           location: classForm.scheduleLocation,
+          startDate: classForm.scheduleStartDate,
+          endDate: classForm.scheduleEndDate,
         },
       ],
       tags: classForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-      instructorId: 'instructor-1',
+      instructorId: classForm.instructorId,
     };
 
     const isEditing = Boolean(editingClassId);
@@ -165,7 +417,7 @@ export default function InstructorClassesScreen() {
         Alert.alert('Nova aula criada', 'A aula foi cadastrada com sucesso.');
       }
 
-      setClassForm(defaultClassForm);
+      setClassForm(createDefaultClassForm());
       setClassErrors({});
       setEditingClassId(null);
     });
@@ -185,7 +437,10 @@ export default function InstructorClassesScreen() {
       scheduleStart: target.schedule[0]?.start ?? '07:00',
       scheduleEnd: target.schedule[0]?.end ?? '08:00',
       scheduleLocation: target.schedule[0]?.location ?? 'Box',
+      scheduleStartDate: target.schedule[0]?.startDate ?? defaultDateStart,
+      scheduleEndDate: target.schedule[0]?.endDate ?? defaultDateEnd,
       tags: target.tags.join(', '),
+      instructorId: target.instructorId ?? instructorProfiles[0]?.id ?? 'instructor-1',
     });
     setClassErrors({});
     setEditingClassId(id);
@@ -205,114 +460,21 @@ export default function InstructorClassesScreen() {
     ]);
   };
 
-  const validateSessionForm = () => {
-    const errors: Partial<Record<keyof SessionFormState, string>> = {};
-
-    if (!sessionForm.classId.trim()) {
-      errors.classId = 'Informe o ID da aula.';
-    }
-
-    if (!sessionForm.startTime.trim() || !sessionForm.endTime.trim()) {
-      errors.startTime = 'Início e fim são obrigatórios.';
-    } else if (new Date(sessionForm.endTime) <= new Date(sessionForm.startTime)) {
-      errors.endTime = 'O fim deve ser depois do início.';
-    }
-
-    if (!sessionForm.capacity.trim()) {
-      errors.capacity = 'Capacidade é obrigatória.';
-    } else if (Number.isNaN(Number(sessionForm.capacity)) || Number(sessionForm.capacity) <= 0) {
-      errors.capacity = 'Use um número maior que zero.';
-    }
-
-    if (!sessionForm.location.trim()) {
-      errors.location = 'Local não pode ficar vazio.';
-    }
-
-    setSessionErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleSubmitSession = () => {
-    const isValid = validateSessionForm();
-    if (!isValid) {
-      Alert.alert('Revise os campos', 'Corrija os destaques antes de salvar a sessão.');
-      return;
-    }
-
-    const payload: Omit<ClassSession, 'id'> = {
-      classId: sessionForm.classId,
-      startTime: sessionForm.startTime,
-      endTime: sessionForm.endTime,
-      location: sessionForm.location,
-      capacity: Number(sessionForm.capacity),
-      tags: sessionForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-      coachNotes: sessionForm.coachNotes,
-    };
-
-    const isEditing = Boolean(editingSessionId);
-    const promptTitle = isEditing ? 'Atualizar sessão' : 'Criar sessão';
-    const promptMessage = isEditing
-      ? 'Deseja salvar as alterações desta sessão?'
-      : 'Deseja criar esta nova sessão?';
-
-    confirmAction(promptTitle, promptMessage, () => {
-      if (editingSessionId) {
-        updateSession(editingSessionId, payload);
-        Alert.alert('Sessão atualizada', 'A sessão foi atualizada com sucesso.');
-      } else {
-        createSession(payload);
-        Alert.alert('Sessão criada', 'A nova sessão foi agendada.');
-      }
-
-      setSessionForm({ ...defaultSessionForm, classId: classes[0]?.id ?? '' });
-      setSessionErrors({});
-      setEditingSessionId(null);
-    });
-  };
-
-  const handleEditSession = (id: string) => {
-    const target = sessions.find((item) => item.id === id);
-    if (!target) return;
-
-    setSessionForm({
-      classId: target.classId,
-      startTime: target.startTime,
-      endTime: target.endTime,
-      location: target.location,
-      capacity: String(target.capacity),
-      tags: target.tags?.join(', ') ?? '',
-      coachNotes: target.coachNotes,
-    });
-    setSessionErrors({});
-    setEditingSessionId(id);
-  };
-
-  const handleRemoveSession = (id: string) => {
-    Alert.alert('Excluir sessão', 'Deseja remover esta sessão da agenda?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Remover',
-        style: 'destructive',
-        onPress: () => {
-          deleteSession(id);
-          Alert.alert('Sessão removida', 'A sessão saiu da agenda.');
-        },
-      },
-    ]);
-  };
-
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
       edges={['top', 'left', 'right', 'bottom']}>
-      <TopBar title="Aulas e sessões" />
+      <TopBar title="Aulas" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
-          Aulas e sessões
+          Aulas recorrentes
         </ThemedText>
 
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Cadastrar ou editar aula</ThemedText>
+          <ThemedText style={styles.muted}>
+            Use os horários disponíveis para evitar conflitos com outras turmas e defina um período de vigência.
+          </ThemedText>
           <View style={styles.formRow}>
             <TextInput
               style={styles.input}
@@ -337,29 +499,64 @@ export default function InstructorClassesScreen() {
             value={classForm.description}
             onChangeText={(text) => setClassForm((prev) => ({ ...prev, description: text }))}
           />
+          <DropdownField
+            label="Coach responsável"
+            value={classForm.instructorId}
+            options={coachOptions.map((coach) => ({ label: coach.label, value: coach.id }))}
+            onSelect={(coachId) => setClassForm((prev) => ({ ...prev, instructorId: coachId }))}
+          />
           <View style={styles.formRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="Dia (ex: Seg)"
+            <DropdownField
+              label="Dia da semana"
               value={classForm.scheduleDay}
-              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleDay: text }))}
+              options={weekDayOptions.map((day) => ({ label: day, value: day }))}
+              onSelect={(day) => setClassForm((prev) => ({ ...prev, scheduleDay: day }))}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Início"
+            <DropdownField
+              label="Horário de início"
               value={classForm.scheduleStart}
-              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleStart: text }))}
+              options={availableStartTimes.map((time) => ({ label: time, value: time }))}
+              onSelect={(start) => setClassForm((prev) => ({ ...prev, scheduleStart: start }))}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Fim"
+            <DropdownField
+              label="Horário de término"
               value={classForm.scheduleEnd}
-              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleEnd: text }))}
+              options={availableEndTimes.map((time) => ({ label: time, value: time }))}
+              onSelect={(end) => setClassForm((prev) => ({ ...prev, scheduleEnd: end }))}
             />
           </View>
           {(classErrors.scheduleDay || classErrors.scheduleStart || classErrors.scheduleEnd) && (
             <ThemedText style={styles.errorText}>
               {classErrors.scheduleDay ?? classErrors.scheduleStart ?? classErrors.scheduleEnd}
+            </ThemedText>
+          )}
+          <View style={styles.rangeRow}>
+            <View style={{ flex: 1 }}>
+              <ThemedText type="defaultSemiBold">Período de vigência</ThemedText>
+              <ThemedText style={styles.muted}>
+                Selecione datas de início e fim para que a aula apareça no calendário.
+              </ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.rangeSummary}>
+                {classForm.scheduleStartDate && classForm.scheduleEndDate
+                  ? `${classForm.scheduleStartDate} até ${classForm.scheduleEndDate}`
+                  : 'Escolha um intervalo'}
+              </ThemedText>
+            </View>
+          </View>
+          <DateRangeCalendar
+            startDate={classForm.scheduleStartDate}
+            endDate={classForm.scheduleEndDate}
+            onChange={(start, end) =>
+              setClassForm((prev) => ({
+                ...prev,
+                scheduleStartDate: start,
+                scheduleEndDate: end,
+              }))
+            }
+          />
+          {(classErrors.scheduleStartDate || classErrors.scheduleEndDate) && (
+            <ThemedText style={styles.errorText}>
+              {classErrors.scheduleStartDate ?? classErrors.scheduleEndDate}
             </ThemedText>
           )}
           <TextInput
@@ -368,7 +565,9 @@ export default function InstructorClassesScreen() {
             value={classForm.scheduleLocation}
             onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleLocation: text }))}
           />
-          {classErrors.scheduleLocation && <ThemedText style={styles.errorText}>{classErrors.scheduleLocation}</ThemedText>}
+          {classErrors.scheduleLocation && (
+            <ThemedText style={styles.errorText}>{classErrors.scheduleLocation}</ThemedText>
+          )}
           <TextInput
             style={styles.input}
             placeholder="Tags separadas por vírgula"
@@ -402,7 +601,15 @@ export default function InstructorClassesScreen() {
                     {trainingClass.category} · {trainingClass.level} · Capacidade {trainingClass.capacity}
                   </ThemedText>
                   <ThemedText style={styles.muted}>
-                    {trainingClass.schedule.map((slot) => `${slot.day} ${slot.start}-${slot.end}`).join(' · ')}
+                    Coach: {coachNameForId(trainingClass.instructorId)}
+                  </ThemedText>
+                  <ThemedText style={styles.muted}>
+                    {trainingClass.schedule
+                      .map(
+                        (slot) =>
+                          `${slot.day} ${slot.start}-${slot.end} · ${slot.startDate ?? 'início imediato'} a ${slot.endDate ?? 'sem data final'}`,
+                      )
+                      .join(' · ')}
                   </ThemedText>
                   <View style={styles.tagRow}>
                     {trainingClass.tags.map((tag) => (
@@ -434,120 +641,6 @@ export default function InstructorClassesScreen() {
           </View>
         </ThemedView>
 
-        <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Agendar sessão</ThemedText>
-          <View style={styles.formRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="ID da aula"
-              value={sessionForm.classId}
-              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, classId: text }))}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Capacidade"
-              keyboardType="numeric"
-              value={sessionForm.capacity}
-              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, capacity: text }))}
-            />
-          </View>
-          {(sessionErrors.classId || sessionErrors.capacity) && (
-            <ThemedText style={styles.errorText}>{sessionErrors.classId ?? sessionErrors.capacity}</ThemedText>
-          )}
-            <TextInput
-              style={styles.input}
-              placeholder="Início (ISO)"
-              value={sessionForm.startTime}
-              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, startTime: text }))}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Fim (ISO)"
-              value={sessionForm.endTime}
-              onChangeText={(text) => setSessionForm((prev) => ({ ...prev, endTime: text }))}
-            />
-          {(sessionErrors.startTime || sessionErrors.endTime) && (
-            <ThemedText style={styles.errorText}>{sessionErrors.startTime ?? sessionErrors.endTime}</ThemedText>
-          )}
-          <TextInput
-            style={styles.input}
-            placeholder="Local"
-            value={sessionForm.location}
-            onChangeText={(text) => setSessionForm((prev) => ({ ...prev, location: text }))}
-          />
-          {sessionErrors.location && <ThemedText style={styles.errorText}>{sessionErrors.location}</ThemedText>}
-          <TextInput
-            style={styles.input}
-            placeholder="Tags da sessão"
-            value={sessionForm.tags}
-            onChangeText={(text) => setSessionForm((prev) => ({ ...prev, tags: text }))}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="Notas do coach"
-            value={sessionForm.coachNotes}
-            onChangeText={(text) => setSessionForm((prev) => ({ ...prev, coachNotes: text }))}
-          />
-          <View style={styles.buttonRow}>
-            <Pressable style={styles.primaryButton} onPress={handleSubmitSession}>
-              <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
-                {editingSessionId ? 'Atualizar sessão' : 'Criar sessão'}
-              </ThemedText>
-            </Pressable>
-            {editingSessionId && (
-              <Pressable style={styles.secondaryButton} onPress={() => setEditingSessionId(null)}>
-                <ThemedText type="defaultSemiBold" style={styles.secondaryButtonText}>
-                  Cancelar edição
-                </ThemedText>
-              </Pressable>
-            )}
-          </View>
-        </ThemedView>
-
-        <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Próximas sessões</ThemedText>
-          <View style={styles.list}>
-            {sortedSessions.map((session) => {
-              const sessionClass = classes.find((item) => item.id === session.classId);
-              return (
-                <ThemedView key={session.id} style={styles.listItem}>
-                  <View style={styles.listText}>
-                    <ThemedText type="defaultSemiBold">{sessionClass?.title ?? session.classId}</ThemedText>
-                    <ThemedText style={styles.muted}>
-                      {new Date(session.startTime).toLocaleString('pt-BR', {
-                        weekday: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}{' '}
-                      · {session.location}
-                    </ThemedText>
-                    <ThemedText style={styles.muted}>
-                      Capacidade {session.capacity} · {session.tags?.join(', ')}
-                    </ThemedText>
-                    {session.coachNotes && <ThemedText style={styles.muted}>{session.coachNotes}</ThemedText>}
-                  </View>
-                  <View style={styles.actionColumn}>
-                    <Pressable style={styles.linkButton} onPress={() => handleEditSession(session.id)}>
-                      <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
-                        Editar
-                      </ThemedText>
-                    </Pressable>
-                    <Pressable
-                      style={styles.destructiveButton}
-                      onPress={() => handleRemoveSession(session.id)}>
-                      <ThemedText type="defaultSemiBold" style={styles.destructiveButtonText}>
-                        Remover
-                      </ThemedText>
-                    </Pressable>
-                  </View>
-                </ThemedView>
-              );
-            })}
-            {sortedSessions.length === 0 && (
-              <ThemedText style={styles.muted}>Nenhuma sessão agendada. Programe datas para suas aulas.</ThemedText>
-            )}
-          </View>
-        </ThemedView>
       </ScrollView>
     </SafeAreaView>
   );
@@ -577,6 +670,51 @@ const styles = StyleSheet.create({
     gap: 10,
     flexWrap: 'wrap',
     alignItems: 'flex-start',
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  dropdownWrapper: {
+    flex: 1,
+    minWidth: 140,
+    gap: 6,
+  },
+  dropdownLabel: {
+    opacity: 0.7,
+  },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+  },
+  dropdownCaret: {
+    opacity: 0.6,
+  },
+  dropdownList: {
+    marginTop: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: '#fff',
+  },
+  dropdownOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  dropdownOptionActive: {
+    backgroundColor: '#dff1ff',
   },
   input: {
     flex: 1,
@@ -669,5 +807,67 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
+  },
+  rangePicker: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    padding: 12,
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  rangeSummary: {
+    marginTop: 6,
+  },
+  weekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  weekDay: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    marginVertical: 2,
+    gap: 6,
+  },
+  dayCellEmpty: {
+    opacity: 0.4,
+  },
+  rangeCell: {
+    backgroundColor: '#dff1ff',
+  },
+  rangeCellText: {
+    color: '#0b3b5a',
+  },
+  rangeEdge: {
+    backgroundColor: '#0e9aed',
+  },
+  rangeEdgeText: {
+    color: '#fff',
+  },
+  monthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  monthButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#d9eefe',
+  },
+  monthTitle: {
+    textTransform: 'capitalize',
   },
 });
