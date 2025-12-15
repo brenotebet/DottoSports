@@ -159,6 +159,34 @@ export type Settlement = {
   receiptIds: string[];
 };
 
+export type EvaluationQuestionnaire = {
+  trainingFrequency: string;
+  goalsFocus: string;
+  mobility: string;
+  nutrition: string;
+  sleepQuality: string;
+  stressLevel?: string;
+};
+
+export type Evaluation = {
+  id: string;
+  studentId: string;
+  date: string;
+  questionnaire: EvaluationQuestionnaire;
+  notes?: string;
+};
+
+export type Goal = {
+  id: string;
+  studentId: string;
+  target: string;
+  metric: string;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  status: 'active' | 'completed' | 'archived';
+};
+
 export type DatabaseSchema = {
   users: UserAccount[];
   instructorProfiles: InstructorProfile[];
@@ -173,4 +201,6 @@ export type DatabaseSchema = {
   paymentIntents: PaymentIntent[];
   paymentSessions: PaymentSession[];
   settlements: Settlement[];
+  evaluations: Evaluation[];
+  goals: Goal[];
 };

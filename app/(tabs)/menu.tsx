@@ -28,10 +28,23 @@ export default function MenuScreen() {
     ? actions
     : actions.filter((item) => item.title !== 'Realizar pagamento');
 
+  const studentActions = hasRole('STUDENT')
+    ? [
+        {
+          title: 'Minhas avaliações',
+          description: 'Consulte seu intake e o histórico enviado pelo instrutor.',
+          href: '/evaluations' as const,
+        },
+      ]
+    : [];
+
+  const quickActions = [...studentActions, ...visibleActions];
+
   const instructorActions = hasRole(['INSTRUCTOR', 'ADMIN'])
     ? [
         { title: 'Painel do instrutor', href: '/instructor/dashboard' as const },
         { title: 'Aulas e sessões', href: '/instructor/classes' as const },
+        { title: 'Avaliações físicas', href: '/instructor/evaluations' as const },
         { title: 'Cobranças e pagamentos', href: '/instructor/payments' as const },
       ]
     : [];
@@ -55,7 +68,7 @@ export default function MenuScreen() {
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Ações rápidas</ThemedText>
           <View style={styles.list}>
-            {visibleActions.map((item) => {
+            {quickActions.map((item) => {
               const content = (
                 <Pressable style={styles.listItem}>
                   <View style={styles.listText}>

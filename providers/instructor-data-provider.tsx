@@ -5,6 +5,8 @@ import type {
   Attendance,
   ClassSession,
   Enrollment,
+  Evaluation,
+  Goal,
   Invoice,
   Payment,
   PaymentIntent,
@@ -18,6 +20,8 @@ import {
   attendance as seedAttendance,
   classes as seedClasses,
   enrollments as seedEnrollments,
+  evaluations as seedEvaluations,
+  goals as seedGoals,
   payments as seedPayments,
   invoices as seedInvoices,
   paymentIntents as seedPaymentIntents,
@@ -88,6 +92,8 @@ type InstructorDataContextValue = {
   paymentSessions: PaymentSession[];
   receipts: Receipt[];
   settlements: Settlement[];
+  evaluations: Evaluation[];
+  goals: Goal[];
   events: SystemEvent[];
   analytics: AnalyticsSnapshot;
   outstandingBalances: {
@@ -144,6 +150,14 @@ type InstructorDataContextValue = {
     intentOverride?: PaymentIntent,
   ) => void;
   cancelEnrollment: (enrollmentId: string) => void;
+  createEvaluation: (payload: Omit<Evaluation, 'id'>) => void;
+  updateEvaluation: (id: string, payload: Partial<Evaluation>) => void;
+  deleteEvaluation: (id: string) => void;
+  createGoal: (payload: Omit<Goal, 'id'>) => void;
+  updateGoal: (id: string, payload: Partial<Goal>) => void;
+  deleteGoal: (id: string) => void;
+  getStudentProfileForEmail: (email: string, displayName?: string) => StudentProfile;
+  getStudentEvaluations: (studentId: string) => Evaluation[];
 };
 
 const InstructorDataContext = createContext<InstructorDataContextValue | undefined>(undefined);
@@ -241,6 +255,8 @@ type PersistedInstructorData = {
   receipts: Receipt[];
   settlements: Settlement[];
   students: StudentProfile[];
+  evaluations: Evaluation[];
+  goals: Goal[];
   cardOnFile: CardOnFile;
   events: SystemEvent[];
 };
@@ -277,6 +293,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [paymentSessions, setPaymentSessions] = useState<PaymentSession[]>(seedPaymentSessions);
   const [receipts, setReceipts] = useState<Receipt[]>(seedReceipts);
   const [settlements, setSettlements] = useState<Settlement[]>(seedSettlements);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>(seedEvaluations);
+  const [goals, setGoals] = useState<Goal[]>(seedGoals);
   const [students, setStudents] = useState<StudentProfile[]>(studentProfiles);
   const [cardOnFile, setCardOnFile] = useState<CardOnFile>(defaultCard);
   const [events, setEvents] = useState<SystemEvent[]>([]);
@@ -319,6 +337,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         if (storedData.paymentSessions) setPaymentSessions(storedData.paymentSessions);
         if (storedData.receipts) setReceipts(storedData.receipts);
         if (storedData.settlements) setSettlements(storedData.settlements);
+        if (storedData.evaluations) setEvaluations(storedData.evaluations);
+        if (storedData.goals) setGoals(storedData.goals);
         if (storedData.students) setStudents(storedData.students);
         if (storedData.cardOnFile) setCardOnFile(storedData.cardOnFile);
         if (storedData.events) setEvents(storedData.events);
@@ -347,6 +367,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         paymentSessions,
         receipts,
         settlements,
+        evaluations,
+        goals,
         students,
         cardOnFile,
         events,
@@ -367,6 +389,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     paymentIntents,
     paymentSessions,
     receipts,
+    evaluations,
+    goals,
     sessions,
     settlements,
     students,
@@ -414,6 +438,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
     return resolvedProfile;
   }, []);
+
+  const getStudentProfileForEmail = useCallback(
+    (email: string, displayName?: string) => ensureStudentProfile(email, displayName ?? email),
+    [ensureStudentProfile],
+  );
 
   const getEnrollmentForStudent = useCallback(
     (studentId: string, classId: string) =>
@@ -848,6 +877,38 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [logEvent],
   );
 
+  const createEvaluation = useCallback((payload: Omit<Evaluation, 'id'>) => {
+    setEvaluations((prev) => [{ ...payload, id: generateId('evaluation') }, ...prev]);
+  }, []);
+
+  const updateEvaluation = useCallback((id: string, payload: Partial<Evaluation>) => {
+    setEvaluations((prev) => prev.map((item) => (item.id === id ? { ...item, ...payload } : item)));
+  }, []);
+
+  const deleteEvaluation = useCallback((id: string) => {
+    setEvaluations((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const createGoal = useCallback((payload: Omit<Goal, 'id'>) => {
+    setGoals((prev) => [{ ...payload, id: generateId('goal') }, ...prev]);
+  }, []);
+
+  const updateGoal = useCallback((id: string, payload: Partial<Goal>) => {
+    setGoals((prev) => prev.map((item) => (item.id === id ? { ...item, ...payload } : item)));
+  }, []);
+
+  const deleteGoal = useCallback((id: string) => {
+    setGoals((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const getStudentEvaluations = useCallback(
+    (studentId: string) =>
+      evaluations
+        .filter((evaluation) => evaluation.studentId === studentId)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [evaluations],
+  );
+
   const chargeStoredCard = useCallback(
     (studentId: string, amount: number, description: string) => {
       const now = new Date();
@@ -1145,6 +1206,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       paymentSessions,
       receipts,
       settlements,
+      evaluations,
+      goals,
       events,
       analytics,
       outstandingBalances,
@@ -1159,6 +1222,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       updateSession,
       deleteSession,
       ensureStudentProfile,
+      getStudentProfileForEmail,
       getEnrollmentForStudent,
       enrollStudentInClass,
       getCapacityUsage,
@@ -1172,6 +1236,14 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       updateCardOnFile,
       updateEnrollmentStatus,
       cancelEnrollment,
+      createEvaluation,
+      updateEvaluation,
+      deleteEvaluation,
+      createGoal,
+      updateGoal,
+      deleteGoal,
+      getStudentProfileForEmail,
+      getStudentEvaluations,
     }),
     [
       classes,
@@ -1185,6 +1257,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       paymentSessions,
       receipts,
       settlements,
+      evaluations,
+      goals,
       events,
       analytics,
       outstandingBalances,
@@ -1193,6 +1267,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       getStudentAccountSnapshot,
       payOutstandingPayment,
       ensureStudentProfile,
+      getStudentProfileForEmail,
       enrollStudentInClass,
       getCapacityUsage,
       getEnrollmentForStudent,
@@ -1205,6 +1280,13 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       updateCardOnFile,
       updateEnrollmentStatus,
       cancelEnrollment,
+      createEvaluation,
+      updateEvaluation,
+      deleteEvaluation,
+      createGoal,
+      updateGoal,
+      deleteGoal,
+      getStudentEvaluations,
     ],
   );
 
