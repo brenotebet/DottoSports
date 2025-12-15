@@ -4,9 +4,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TopBar } from '@/components/top-bar';
 import { ClassSession, TrainingClass } from '@/constants/schema';
 import { Colors } from '@/constants/theme';
-import { TopBar } from '@/components/top-bar';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 type ClassFormState = {
@@ -307,10 +307,6 @@ export default function InstructorClassesScreen() {
       edges={['top', 'left', 'right', 'bottom']}>
       <TopBar title="Aulas e sessões" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <ThemedText type="title" style={styles.heading}>
-          Aulas e sessões
-        </ThemedText>
-
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Cadastrar ou editar aula</ThemedText>
           <View style={styles.formRow}>
