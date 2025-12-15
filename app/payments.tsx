@@ -1,12 +1,12 @@
+import { Link } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Link } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { TopBar } from '@/components/top-bar';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { useInstructorData } from '@/providers/instructor-data-provider';
@@ -58,13 +58,9 @@ export default function PaymentsScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
-      edges={['top', 'left', 'right', 'bottom']}>
+      edges={['left', 'right', 'bottom']}>
       <TopBar title="Pagamentos" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <ThemedText type="title" style={styles.heading}>
-          Seus pagamentos
-        </ThemedText>
-
         <ThemedView style={styles.cardPrimary}>
           <ThemedText type="subtitle" style={styles.cardPrimaryText}>
             Saldo atual
