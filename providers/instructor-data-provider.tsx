@@ -156,6 +156,7 @@ type InstructorDataContextValue = {
   createGoal: (payload: Omit<Goal, 'id'>) => void;
   updateGoal: (id: string, payload: Partial<Goal>) => void;
   deleteGoal: (id: string) => void;
+  getStudentProfileForEmail: (email: string, displayName?: string) => StudentProfile;
   getStudentEvaluations: (studentId: string) => Evaluation[];
 };
 
@@ -437,6 +438,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
     return resolvedProfile;
   }, []);
+
+  const getStudentProfileForEmail = useCallback(
+    (email: string, displayName?: string) => ensureStudentProfile(email, displayName ?? email),
+    [ensureStudentProfile],
+  );
 
   const getEnrollmentForStudent = useCallback(
     (studentId: string, classId: string) =>
@@ -1216,6 +1222,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       updateSession,
       deleteSession,
       ensureStudentProfile,
+      getStudentProfileForEmail,
       getEnrollmentForStudent,
       enrollStudentInClass,
       getCapacityUsage,
@@ -1235,6 +1242,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       createGoal,
       updateGoal,
       deleteGoal,
+      getStudentProfileForEmail,
       getStudentEvaluations,
     }),
     [
@@ -1259,6 +1267,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       getStudentAccountSnapshot,
       payOutstandingPayment,
       ensureStudentProfile,
+      getStudentProfileForEmail,
       enrollStudentInClass,
       getCapacityUsage,
       getEnrollmentForStudent,
