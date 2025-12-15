@@ -10,7 +10,7 @@ import { Colors } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
-export const options = { headerShown: true };
+export const options = { headerShown: false };
 
 export default function ClassDetailsScreen() {
   const { classId } = useLocalSearchParams<{ classId: string }>();
@@ -102,8 +102,8 @@ export default function ClassDetailsScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea ,{paddingTop: insets.top + 12}]} edges={['left', 'right', 'bottom']}>
-      <TopBar title="Detalhes da aula" fallbackHref="/calendar" />
+    <SafeAreaView style={[styles.safeArea ,{paddingTop: insets.top}]} edges={['left', 'right', 'bottom']}>
+      <TopBar title="Detalhes da aula" fallbackHref="/(tabs)/classes" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           {trainingClass.title}

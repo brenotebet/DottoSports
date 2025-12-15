@@ -5,11 +5,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TopBar } from '@/components/top-bar';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
-
-export const options = { headerShown: false };
 
 export default function ClassCatalogScreen() {
   const colorScheme = useColorScheme();
@@ -64,8 +63,9 @@ export default function ClassCatalogScreen() {
 
   return (
     <SafeAreaView
-      style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
+      style={[styles.safeArea, { paddingTop: insets.top }]}
       edges={['top', 'left', 'right', 'bottom']}>
+      <TopBar title="Catálogo de aulas" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           Encontre sua próxima aula

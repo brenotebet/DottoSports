@@ -5,18 +5,11 @@ export default function ClassCatalogLayout() {
   return (
     <Stack
       screenOptions={{
-          headerShown: false,
+        headerShown: false,
       }}>
-      <Stack.Screen name="index" options={{ title: 'Catálogo de aulas' }} />
-      <Stack.Screen
-        name="[classId]"
-        options={{
-          title: 'Detalhes da aula',
-          headerStyle: { backgroundColor: '#0e9aed' },
-          headerTintColor: '#022a4c',
-          headerTitleStyle: { fontWeight: '800', fontSize: 18 },
-        }}
-      />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="registered" />
+      <Stack.Screen name="[classId]" />
     </Stack>
   );
 }

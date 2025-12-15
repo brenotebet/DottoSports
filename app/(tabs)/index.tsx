@@ -15,8 +15,16 @@ export default function DashboardScreen() {
   const colorScheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { sessions, classes, payments, enrollments, ensureStudentProfile, getEnrollmentForStudent, recordCheckIn } =
-    useInstructorData();
+  const {
+    sessions,
+    classes,
+    payments,
+    enrollments,
+    ensureStudentProfile,
+    getEnrollmentForStudent,
+    recordCheckIn,
+    getCapacityUsage,
+  } = useInstructorData();
   const [studentId, setStudentId] = useState<string | null>(null);
   const [checkInStatus, setCheckInStatus] = useState<string | null>(null);
 
@@ -27,15 +35,41 @@ export default function DashboardScreen() {
     }
   }, [ensureStudentProfile, user]);
 
+  const studentEnrollments = useMemo(
+    () =>
+      enrollments.filter(
+        (item) => item.studentId === studentId && item.status !== 'cancelled',
+      ),
+    [enrollments, studentId],
+  );
+
   const upcomingSession = useMemo(() => {
-    return sessions
-      .slice()
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
-  }, [sessions]);
+    if (studentEnrollments.length === 0) return null;
+
+    const enrolledClassIds = new Set(studentEnrollments.map((item) => item.classId));
+    const now = Date.now();
+
+    const futureSessions = sessions
+      .filter((session) => enrolledClassIds.has(session.classId) && new Date(session.startTime).getTime() >= now)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+    if (futureSessions.length > 0) return futureSessions[0];
+
+    const allSessions = sessions
+      .filter((session) => enrolledClassIds.has(session.classId))
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+    return allSessions[0] ?? null;
+  }, [sessions, studentEnrollments]);
 
   const sessionClass = useMemo(
     () => classes.find((item) => item.id === upcomingSession?.classId),
     [classes, upcomingSession?.classId],
+  );
+
+  const sessionCapacity = useMemo(
+    () => (upcomingSession?.classId ? getCapacityUsage(upcomingSession.classId) : null),
+    [getCapacityUsage, upcomingSession?.classId],
   );
 
   const enrollment = useMemo(() => {
@@ -51,13 +85,15 @@ export default function DashboardScreen() {
   }, [payments, studentId]);
 
   const highlights = [
-    { label: 'Aulas inscritas', value: `${enrollments.filter((item) => item.studentId === studentId).length} turmas` },
+    { label: 'Aulas inscritas', value: `${studentEnrollments.length} turmas`, href: '/(tabs)/classes/registered' },
     { label: 'Próxima cobrança', value: nextPayment ? `Vence ${nextPayment.dueDate}` : 'Nenhuma pendente' },
     {
       label: 'Check-in rápido',
       value: enrollment ? (enrollment.status === 'waitlist' ? 'Na espera' : 'Liberado') : 'Precisa inscrever',
     },
   ];
+  const hasEnrollments = studentEnrollments.length > 0;
+  const canCheckIn = Boolean(enrollment && upcomingSession);
 
   const handleQuickCheckIn = () => {
     if (!studentId || !upcomingSession || !enrollment) {
@@ -74,7 +110,7 @@ export default function DashboardScreen() {
         onPress: () => {
           try {
             recordCheckIn(upcomingSession.id, enrollment.id, 'manual');
-            const message = 'Presença registrada para a próxima sessão.';
+            const message = 'Check-in confirmado. Sua aula começará em breve.';
             setCheckInStatus(message);
             Alert.alert('Check-in concluído', message);
           } catch (error) {
@@ -109,10 +145,16 @@ export default function DashboardScreen() {
                   hour: '2-digit',
                   minute: '2-digit',
                 })} · ${upcomingSession.location}`
-              : 'Adicione aulas pelo catálogo.'}
+              : hasEnrollments
+                ? 'Nenhuma sessão agendada para suas turmas.'
+                : 'Adicione aulas pelo catálogo.'}
           </ThemedText>
           <ThemedText type="defaultSemiBold" style={[styles.muted, styles.cardPrimaryText]}>
-            {sessionClass ? `Capacidade ${sessionClass.capacity}` : 'Nenhuma turma ativa'}
+            {sessionCapacity && sessionClass
+              ? `Capacidade ${sessionCapacity.available} / ${sessionCapacity.capacity}`
+              : sessionClass
+                ? `Capacidade ${sessionClass.capacity}`
+                : 'Nenhuma turma ativa'}
           </ThemedText>
           <View style={styles.rowActions}>
             <Link href="/(tabs)/classes" asChild>
@@ -122,14 +164,21 @@ export default function DashboardScreen() {
                 </ThemedText>
               </Pressable>
             </Link>
-            <Pressable
-              style={[styles.checkInButton, { backgroundColor: '#022a4c' }]}
-              onPress={handleQuickCheckIn}>
-              <ThemedText type="defaultSemiBold" style={styles.checkInText}>
-                Check-in rápido
-              </ThemedText>
-            </Pressable>
+            {canCheckIn ? (
+              <Pressable
+                style={[styles.checkInButton, { backgroundColor: '#022a4c' }]}
+                onPress={handleQuickCheckIn}>
+                <ThemedText type="defaultSemiBold" style={styles.checkInText}>
+                  Check-in rápido
+                </ThemedText>
+              </Pressable>
+            ) : null}
           </View>
+          {!hasEnrollments ? (
+            <ThemedText style={[styles.cardPrimaryText, styles.muted]}>
+              Nenhuma inscrição ativa. Veja o catálogo para escolher uma aula.
+            </ThemedText>
+          ) : null}
           {checkInStatus ? (
             <ThemedText style={[styles.cardPrimaryText, styles.muted]}>{checkInStatus}</ThemedText>
           ) : null}
@@ -165,10 +214,19 @@ export default function DashboardScreen() {
           <ThemedText type="subtitle">Resumo rápido</ThemedText>
           <View style={styles.highlightGrid}>
             {highlights.map((item) => (
-              <ThemedView key={item.label} style={styles.highlightItem}>
-                <ThemedText type="defaultSemiBold">{item.value}</ThemedText>
-                <ThemedText style={styles.muted}>{item.label}</ThemedText>
-              </ThemedView>
+              item.href ? (
+                <Link key={item.label} href={item.href} asChild>
+                  <Pressable style={[styles.highlightItem, styles.highlightInteractive]}>
+                    <ThemedText type="defaultSemiBold">{item.value}</ThemedText>
+                    <ThemedText style={styles.muted}>{item.label}</ThemedText>
+                  </Pressable>
+                </Link>
+              ) : (
+                <ThemedView key={item.label} style={styles.highlightItem}>
+                  <ThemedText type="defaultSemiBold">{item.value}</ThemedText>
+                  <ThemedText style={styles.muted}>{item.label}</ThemedText>
+                </ThemedView>
+              )
             ))}
           </View>
         </ThemedView>
@@ -254,14 +312,18 @@ const styles = StyleSheet.create({
   },
   highlightGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     gap: 12,
   },
   highlightItem: {
-    width: '48%',
+    flex: 1,
     padding: 12,
     borderRadius: 12,
     backgroundColor: '#f0f8ff',
     gap: 6,
+  },
+  highlightInteractive: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#c2d9ef',
   },
 });
