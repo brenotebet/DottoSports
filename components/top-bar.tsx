@@ -7,17 +7,32 @@ import { Colors } from '@/constants/theme';
 
 interface TopBarProps {
   title?: string;
+  fallbackHref?: string;
 }
 
-export function TopBar({ title }: TopBarProps) {
+export function TopBar({ title, fallbackHref }: TopBarProps) {
   const router = useRouter();
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    if (fallbackHref) {
+      router.replace(fallbackHref);
+      return;
+    }
+
+    router.replace('/');
+  };
 
   return (
     <View style={styles.container}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Voltar"
-        onPress={() => router.back()}
+        onPress={handleBack}
         style={styles.backButton}>
         <IconSymbol name="chevron.left" size={22} color="#022a4c" />
       </Pressable>

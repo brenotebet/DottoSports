@@ -242,12 +242,15 @@ export default function CalendarScreen() {
           </ThemedText>
 
           <View style={styles.scheduleList}>
-            {classesForDay.map((item, index) => (
-              <Link key={`${selectedKey}-${index}`} href={item.classId ? `/classes/${item.classId}` : undefined} asChild>
+            {classesForDay.map((item, index) => {
+              const classHref = item.classId ? `/classes/${item.classId}` : null;
+
+              const sessionContent = (
                 <Pressable
+                  key={`${selectedKey}-${index}`}
                   style={styles.session}
-                  onPress={() => item.classId && router.push(`/classes/${item.classId}`)}
-                  disabled={!item.classId}>
+                  onPress={() => classHref && router.push(classHref)}
+                  disabled={!classHref}>
                   <View>
                     <ThemedText type="defaultSemiBold">{item.classTitle}</ThemedText>
                     <ThemedText style={styles.muted}>{item.location}</ThemedText>
@@ -257,8 +260,16 @@ export default function CalendarScreen() {
                   </View>
                   <ThemedText type="defaultSemiBold">{item.time}</ThemedText>
                 </Pressable>
-              </Link>
-            ))}
+              );
+
+              return classHref ? (
+                <Link key={`${selectedKey}-${index}`} href={classHref} asChild>
+                  {sessionContent}
+                </Link>
+              ) : (
+                <View key={`${selectedKey}-${index}`}>{sessionContent}</View>
+              );
+            })}
           </View>
         </ThemedView>
       </ScrollView>
