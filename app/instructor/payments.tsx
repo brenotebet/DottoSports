@@ -3,8 +3,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
 import { TopBar } from '@/components/top-bar';
+import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 const formatBRL = (amount: number) => `R$ ${amount.toFixed(2)}`;
@@ -87,12 +87,9 @@ export default function InstructorPaymentsScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
-      edges={['top', 'left', 'right', 'bottom']}>
+      edges={['left', 'right', 'bottom']}>
       <TopBar title="Cobranças e pagamentos" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <ThemedText type="title" style={styles.heading}>
-          Cobranças e liquidações
-        </ThemedText>
 
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Saldos em aberto</ThemedText>
