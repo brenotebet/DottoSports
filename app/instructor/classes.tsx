@@ -463,7 +463,7 @@ export default function InstructorClassesScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
-      edges={['left', 'right', 'bottom']}>
+      edges={['top', 'left', 'right', 'bottom']}>
       <TopBar title="Aulas" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
