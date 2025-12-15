@@ -6,7 +6,6 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { TrainingClass } from '@/constants/schema';
 import { Colors } from '@/constants/theme';
-import { TopBar } from '@/components/top-bar';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 

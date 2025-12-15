@@ -1,7 +1,7 @@
 import { useAudioPlayer } from 'expo-audio';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -46,6 +46,8 @@ export default function StopwatchScreen() {
   const [currentRound, setCurrentRound] = useState(1);
   const [timeLeft, setTimeLeft] = useState(workDuration);
   const intervalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const insets = useSafeAreaInsets();
+  
 
   const dingPlayer = useAudioPlayer(require('../assets/boxing-ding.mp3'));
 
@@ -170,7 +172,7 @@ export default function StopwatchScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['left', 'right', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, {paddingTop: insets.top + 12}]} edges={['top', 'left', 'right', 'bottom']}>
       <TopBar title="Cronômetro" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
