@@ -10,15 +10,24 @@ export type AuthenticatedUser = {
   idToken: string;
   refreshToken: string;
   uid: string;
-   role: UserRole;
-   displayName: string;
+  role: UserRole;
+  displayName: string;
+};
+
+export type SignupPayload = {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  cpf: string;
 };
 
 type AuthContextValue = {
   user: AuthenticatedUser | null;
   initializing: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  signup: (payload: SignupPayload) => Promise<void>;
   logout: () => void;
   hasRole: (allowed: UserRole | UserRole[]) => boolean;
 };
@@ -87,9 +96,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await persistUser(authenticated);
   };
 
-  const signup = async (email: string, password: string) => {
+  const signup = async ({ email, password, ...profile }: SignupPayload) => {
     const credentials = await signUpWithEmail(email.trim(), password);
     await sendEmailVerification(credentials.idToken);
+
+    // TODO: Persist profile data (profile) to your user collection once a backend is available
+    void profile;
   };
 
   const logout = () => {
