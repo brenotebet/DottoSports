@@ -9,6 +9,11 @@ import { useAuth } from '@/providers/auth-provider';
 
 const actions = [
   { title: 'Gerenciar conta', description: 'Atualize plano, dados pessoais e preferências.' },
+  {
+    title: 'Avaliações físicas',
+    description: 'Registre um novo questionário e revise históricos.',
+    href: '/(tabs)/menu/evaluations' as const,
+  },
   { title: 'Definir meta', description: 'Cadastre um novo objetivo de força ou condicionamento.' },
   { title: 'Fale conosco', description: 'Envie uma mensagem rápida para a equipe do box.' },
   {
