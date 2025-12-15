@@ -128,6 +128,7 @@ type InstructorDataContextValue = {
     sessionOverride?: PaymentSession,
     intentOverride?: PaymentIntent,
   ) => void;
+  cancelEnrollment: (enrollmentId: string) => void;
 };
 
 const InstructorDataContext = createContext<InstructorDataContextValue | undefined>(undefined);
@@ -492,25 +493,27 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     }, {});
   }, [attendance, enrollments, invoices, payments, students]);
 
-  const outstandingBalances = useMemo(
-    () =>
-      payments
-        .filter((payment) => payment.status !== 'paid')
-        .map((payment) => {
-          const invoice = invoices.find((item) => item.paymentId === payment.id);
-          const student = students.find((item) => item.id === payment.studentId);
-          const email = seedAccounts.find((account) => account.id === student?.userId)?.email;
-          const isOverdue = new Date(payment.dueDate) < new Date();
-          return {
-            payment,
-            invoice,
-            student,
-            email,
-            status: payment.status === 'failed' ? 'failed' : isOverdue ? 'overdue' : 'pending',
-          } as const;
-        }),
-    [invoices, payments, students],
-  );
+  const outstandingBalances = useMemo(() => {
+    const cancelledEnrollmentIds = new Set(
+      enrollments.filter((item) => item.status === 'cancelled').map((item) => item.id),
+    );
+
+    return payments
+      .filter((payment) => payment.status !== 'paid' && !cancelledEnrollmentIds.has(payment.enrollmentId ?? ''))
+      .map((payment) => {
+        const invoice = invoices.find((item) => item.paymentId === payment.id);
+        const student = students.find((item) => item.id === payment.studentId);
+        const email = seedAccounts.find((account) => account.id === student?.userId)?.email;
+        const isOverdue = new Date(payment.dueDate) < new Date();
+        return {
+          payment,
+          invoice,
+          student,
+          email,
+          status: payment.status === 'failed' ? 'failed' : isOverdue ? 'overdue' : 'pending',
+        } as const;
+      });
+  }, [enrollments, invoices, payments, students]);
 
   const analytics = useMemo<AnalyticsSnapshot>(() => {
     const totalRevenue = payments
@@ -715,6 +718,44 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       prev.map((enrollment) => (enrollment.id === enrollmentId ? { ...enrollment, status } : enrollment)),
     );
   };
+
+  const cancelEnrollment = useCallback(
+    (enrollmentId: string) => {
+      const nowIso = new Date().toISOString();
+      setEnrollments((prev) =>
+        prev.map((enrollment) =>
+          enrollment.id === enrollmentId
+            ? { ...enrollment, status: 'cancelled', updatedAt: nowIso }
+            : enrollment,
+        ),
+      );
+
+      setPayments((prev) =>
+        prev.map((payment) =>
+          payment.enrollmentId === enrollmentId
+            ? {
+                ...payment,
+                status: 'failed',
+                description: payment.description
+                  ? `${payment.description} (cancelado)`
+                  : 'Pagamento cancelado',
+              }
+            : payment,
+        ),
+      );
+
+      setInvoices((prev) =>
+        prev.map((invoice) =>
+          invoice.enrollmentId === enrollmentId
+            ? { ...invoice, status: 'void', notes: invoice.notes ?? 'Cancelado pelo aluno.' }
+            : invoice,
+        ),
+      );
+
+      logEvent('enrollment_cancelled', 'Inscrição cancelada pelo aluno.', { enrollmentId });
+    },
+    [logEvent],
+  );
 
   const chargeStoredCard = useCallback(
     (studentId: string, amount: number, description: string) => {
@@ -1038,6 +1079,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       processPaymentWebhook,
       updateCardOnFile,
       updateEnrollmentStatus,
+      cancelEnrollment,
     }),
     [
       classes,
@@ -1069,6 +1111,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       processPaymentWebhook,
       updateCardOnFile,
       updateEnrollmentStatus,
+      cancelEnrollment,
     ],
   );
 
