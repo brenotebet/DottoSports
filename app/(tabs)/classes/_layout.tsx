@@ -8,6 +8,7 @@ export default function ClassCatalogLayout() {
           headerShown: false,
       }}>
       <Stack.Screen name="index" options={{ title: 'Catálogo de aulas' }} />
+      <Stack.Screen name="registered" options={{ title: 'Aulas inscritas' }} />
       <Stack.Screen
         name="[classId]"
         options={{
