@@ -22,6 +22,7 @@ export default function ClassDetailsScreen() {
     enrollStudentInClass,
     getCapacityUsage,
     getEnrollmentForStudent,
+    cancelEnrollment,
   } = useInstructorData();
 
   const [statusMessage, setStatusMessage] = useState('');
@@ -46,7 +47,8 @@ export default function ClassDetailsScreen() {
 
   const existingEnrollment = useMemo(() => {
     if (!currentStudentId || !classId) return undefined;
-    return getEnrollmentForStudent(currentStudentId, classId);
+    const enrollment = getEnrollmentForStudent(currentStudentId, classId);
+    return enrollment?.status === 'cancelled' ? undefined : enrollment;
   }, [classId, currentStudentId, getEnrollmentForStudent]);
 
   const confirmAction = (title: string, message: string, onConfirm: () => void) => {
@@ -86,6 +88,16 @@ export default function ClassDetailsScreen() {
         setStatusMessage(message);
         Alert.alert('Inscrição confirmada', message);
       }
+    });
+  };
+
+  const handleUnregister = () => {
+    if (!existingEnrollment) return;
+    confirmAction('Cancelar inscrição', 'Deseja sair desta turma? Cancelaremos cobranças futuras.', () => {
+      cancelEnrollment(existingEnrollment.id);
+      const message = 'Inscrição cancelada. Você pode se inscrever novamente quando quiser.';
+      setStatusMessage(message);
+      Alert.alert('Inscrição cancelada', message);
     });
   };
 
@@ -139,6 +151,13 @@ export default function ClassDetailsScreen() {
               {existingEnrollment ? 'Atualizar inscrição' : 'Inscrever nesta aula'}
             </ThemedText>
           </Pressable>
+          {existingEnrollment ? (
+            <Pressable style={styles.secondaryButton} onPress={handleUnregister}>
+              <ThemedText type="defaultSemiBold" style={styles.secondaryButtonText}>
+                Cancelar inscrição
+              </ThemedText>
+            </Pressable>
+          ) : null}
           {statusMessage ? <ThemedText style={styles.statusText}>{statusMessage}</ThemedText> : null}
           {existingEnrollment && (
             <ThemedText style={styles.muted}>
@@ -245,6 +264,18 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#022a4c',
+  },
+  secondaryButton: {
+    marginTop: 8,
+    backgroundColor: '#f4f6f8',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#d3d9e2',
+  },
+  secondaryButtonText: {
+    color: '#0b3b5a',
   },
   statusText: {
     marginTop: 6,

@@ -51,6 +51,11 @@ export default function CalendarScreen() {
     return account?.displayName ?? account?.email ?? 'Coach';
   }, []);
 
+  const today = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }, []);
+
   const firstPlannedDate = useMemo(() => {
     const dates: Date[] = [];
 
@@ -64,10 +69,10 @@ export default function CalendarScreen() {
 
     sessions.forEach((session) => dates.push(new Date(session.startTime)));
 
-    if (dates.length === 0) return new Date();
+    if (dates.length === 0) return today;
     const earliest = dates.reduce((min, date) => (date < min ? date : min), dates[0]);
-    return earliest;
-  }, [classes, sessions]);
+    return earliest < today ? today : earliest;
+  }, [classes, sessions, today]);
 
   const [currentMonth, setCurrentMonth] = useState(
     new Date(firstPlannedDate.getFullYear(), firstPlannedDate.getMonth(), 1),
@@ -166,8 +171,15 @@ export default function CalendarScreen() {
 
   const handleMonthChange = (offset: number) => {
     const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
+    const nextIsBeforeToday =
+      next.getFullYear() < today.getFullYear() ||
+      (next.getFullYear() === today.getFullYear() && next.getMonth() < today.getMonth());
+
+    if (nextIsBeforeToday) return;
+
     setCurrentMonth(next);
-    setSelectedDate(new Date(next.getFullYear(), next.getMonth(), 1));
+    const nextSelected = new Date(next.getFullYear(), next.getMonth(), 1);
+    setSelectedDate(nextSelected < today ? today : nextSelected);
   };
 
   const renderDayCell = (cellDate: Date | null, index: number) => {
@@ -179,14 +191,31 @@ export default function CalendarScreen() {
     const hasSessions = Boolean(sessionsByDay[key]?.length);
     const isSelected = key === selectedKey;
 
+    const isPast =
+      cellDate.getFullYear() < today.getFullYear() ||
+      (cellDate.getFullYear() === today.getFullYear() && cellDate.getMonth() < today.getMonth()) ||
+      dateKey(cellDate) < dateKey(today);
+
+    const isSelectable = !isPast;
+
     return (
       <Pressable
         key={key}
-        style={[styles.dayCell, hasSessions && styles.dayCellHasClasses, isSelected && styles.dayCellSelected]}
-        onPress={() => setSelectedDate(cellDate)}>
+        style={[
+          styles.dayCell,
+          hasSessions && styles.dayCellHasClasses,
+          isSelected && styles.dayCellSelected,
+          isPast && styles.dayCellPast,
+        ]}
+        onPress={() => isSelectable && setSelectedDate(cellDate)}
+        disabled={!isSelectable}>
         <ThemedText
           type="defaultSemiBold"
-          style={[hasSessions && styles.dayCellHasClassesText, isSelected && styles.selectedText]}>
+          style={[
+            hasSessions && styles.dayCellHasClassesText,
+            isSelected && styles.selectedText,
+            isPast && styles.dayCellPastText,
+          ]}>
           {cellDate.getDate()}
         </ThemedText>
       </Pressable>
@@ -338,6 +367,12 @@ const styles = StyleSheet.create({
   },
   dayCellSelected: {
     backgroundColor: '#0e9aed',
+  },
+  dayCellPast: {
+    opacity: 0.45,
+  },
+  dayCellPastText: {
+    color: '#7a7a7a',
   },
   dayCellEmpty: {
     opacity: 0.4,
