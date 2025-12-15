@@ -33,7 +33,7 @@ export default function InstructorPaymentsScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
-      edges={['left', 'right', 'bottom']}>
+      edges={['top', 'left', 'right', 'bottom']}>
       <TopBar title="Cobranças e pagamentos" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedView style={styles.card}>

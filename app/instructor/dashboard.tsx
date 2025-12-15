@@ -30,7 +30,7 @@ export default function InstructorDashboardScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
-      edges={[ 'left', 'right', 'bottom']}>
+      edges={['top', 'left', 'right', 'bottom']}>
       <TopBar title="Painel do instrutor" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
