@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -26,25 +26,86 @@ const monthNames = [
 const dateKey = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
+const dayIndexMap: Record<string, number> = {
+  Dom: 0,
+  Seg: 1,
+  Ter: 2,
+  Qua: 3,
+  Qui: 4,
+  Sex: 5,
+  Sáb: 6,
+};
+
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const { sessions, classes } = useInstructorData();
 
-  const firstSessionDate = useMemo(() => {
-    if (sessions.length === 0) return new Date();
-    const sorted = [...sessions].sort(
-      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
-    );
-    return new Date(sorted[0].startTime);
-  }, [sessions]);
+  const firstPlannedDate = useMemo(() => {
+    const dates: Date[] = [];
+
+    classes.forEach((trainingClass) => {
+      trainingClass.schedule.forEach((slot) => {
+        if (slot.startDate) {
+          dates.push(new Date(slot.startDate));
+        }
+      });
+    });
+
+    sessions.forEach((session) => dates.push(new Date(session.startTime)));
+
+    if (dates.length === 0) return new Date();
+    const earliest = dates.reduce((min, date) => (date < min ? date : min), dates[0]);
+    return earliest;
+  }, [classes, sessions]);
 
   const [currentMonth, setCurrentMonth] = useState(
-    new Date(firstSessionDate.getFullYear(), firstSessionDate.getMonth(), 1),
+    new Date(firstPlannedDate.getFullYear(), firstPlannedDate.getMonth(), 1),
   );
-  const [selectedDate, setSelectedDate] = useState(firstSessionDate);
+  const [selectedDate, setSelectedDate] = useState(firstPlannedDate);
+
+  useEffect(() => {
+    setCurrentMonth(new Date(firstPlannedDate.getFullYear(), firstPlannedDate.getMonth(), 1));
+    setSelectedDate(firstPlannedDate);
+  }, [firstPlannedDate]);
+
+  const recurringByDay = useMemo(() => {
+    const map: Record<string, { classTitle: string; location: string; time: string }[]> = {};
+    const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+
+    classes.forEach((trainingClass) => {
+      trainingClass.schedule.forEach((slot) => {
+        const dayIndex = dayIndexMap[slot.day];
+        if (dayIndex === undefined) return;
+
+        const startRange = slot.startDate ? new Date(slot.startDate) : monthStart;
+        const endRange = slot.endDate ? new Date(slot.endDate) : monthEnd;
+
+        const rangeStart = new Date(Math.max(monthStart.getTime(), startRange.getTime()));
+        const rangeEnd = new Date(Math.min(monthEnd.getTime(), endRange.getTime()));
+
+        for (let cursor = new Date(rangeStart); cursor <= rangeEnd; cursor.setDate(cursor.getDate() + 1)) {
+          if (cursor.getDay() !== dayIndex) continue;
+
+          const key = dateKey(cursor);
+          if (!map[key]) map[key] = [];
+          map[key].push({
+            classTitle: trainingClass.title,
+            location: slot.location,
+            time: `${slot.start} - ${slot.end}`,
+          });
+        }
+      });
+    });
+
+    return map;
+  }, [classes, currentMonth]);
 
   const sessionsByDay = useMemo(() => {
-    const map: Record<string, { classTitle: string; location: string; time: string }[]> = {};
+    const map: Record<string, { classTitle: string; location: string; time: string }[]> = Object.fromEntries(
+      Object.entries(recurringByDay).map(([key, value]) => [key, [...value]]),
+    );
+
     sessions.forEach((session) => {
       const sessionDate = new Date(session.startTime);
       const key = dateKey(sessionDate);
@@ -63,7 +124,7 @@ export default function CalendarScreen() {
       });
     });
     return map;
-  }, [classes, sessions]);
+  }, [classes, recurringByDay, sessions]);
 
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const startOffset = (currentMonth.getDay() + 6) % 7; // segunda como início
@@ -100,12 +161,13 @@ export default function CalendarScreen() {
     return (
       <Pressable
         key={key}
-        style={[styles.dayCell, isSelected && styles.dayCellSelected]}
+        style={[styles.dayCell, hasSessions && styles.dayCellHasClasses, isSelected && styles.dayCellSelected]}
         onPress={() => setSelectedDate(cellDate)}>
-        <ThemedText type="defaultSemiBold" style={isSelected && styles.selectedText}>
+        <ThemedText
+          type="defaultSemiBold"
+          style={[hasSessions && styles.dayCellHasClassesText, isSelected && styles.selectedText]}>
           {cellDate.getDate()}
         </ThemedText>
-        {hasSessions && <View style={[styles.dot, isSelected && styles.dotSelected]} />}
       </Pressable>
     );
   };
@@ -228,7 +290,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 12,
     marginVertical: 2,
-    gap: 6,
+  },
+  dayCellHasClasses: {
+    backgroundColor: '#d9eefe',
   },
   dayCellSelected: {
     backgroundColor: '#0e9aed',
@@ -239,14 +303,8 @@ const styles = StyleSheet.create({
   selectedText: {
     color: '#fff',
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#0e9aed',
-  },
-  dotSelected: {
-    backgroundColor: '#fff',
+  dayCellHasClassesText: {
+    color: '#0b3b5a',
   },
   scheduleList: {
     gap: 12,
