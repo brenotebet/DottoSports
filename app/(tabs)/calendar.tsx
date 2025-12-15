@@ -243,7 +243,9 @@ export default function CalendarScreen() {
 
           <View style={styles.scheduleList}>
             {classesForDay.map((item, index) => {
-              const classHref = item.classId ? `/classes/${item.classId}` : null;
+              const classHref = item.classId
+                ? (`/classes/${item.classId}` as const)
+                : null;
 
               const sessionContent = (
                 <Pressable

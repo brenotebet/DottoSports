@@ -4,11 +4,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { TopBar } from '@/components/top-bar';
 import { TrainingClass } from '@/constants/schema';
+import { TopBar } from '@/components/top-bar';
 import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
+import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 
 type ClassFormState = {
   title: string;

@@ -22,6 +22,7 @@ export default function InstructorDashboardScreen() {
   const paymentHighlights = classRosterEntries
     .flatMap((item) => item.roster)
     .map((entry) => ({
+      enrollmentId: entry.enrollment.id,
       student: entry.student,
       status: entry.paymentStatus,
       label: entry.paymentLabel,
@@ -210,7 +211,7 @@ export default function InstructorDashboardScreen() {
               <ThemedText style={styles.muted}>Nenhum pagamento para monitorar agora.</ThemedText>
             )}
             {paymentHighlights.map((item) => (
-              <View key={item.student.id} style={styles.paymentRow}>
+              <View key={item.enrollmentId} style={styles.paymentRow}>
                 <View style={styles.rosterText}>
                   <ThemedText type="defaultSemiBold">{item.student.fullName}</ThemedText>
                   <ThemedText style={styles.muted}>{item.student.phone}</ThemedText>
