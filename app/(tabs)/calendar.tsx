@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Link, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
+import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 
 const weekDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const monthNames = [
@@ -39,6 +41,15 @@ const dayIndexMap: Record<string, number> = {
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
   const { sessions, classes } = useInstructorData();
+  const router = useRouter();
+
+  const instructorNameFor = useCallback((instructorId?: string) => {
+    if (!instructorId) return 'Coach';
+    const profile = instructorProfiles.find((item) => item.id === instructorId || item.userId === instructorId);
+    if (profile) return profile.fullName;
+    const account = seedAccounts.find((item) => item.id === instructorId);
+    return account?.displayName ?? account?.email ?? 'Coach';
+  }, []);
 
   const firstPlannedDate = useMemo(() => {
     const dates: Date[] = [];
@@ -69,7 +80,10 @@ export default function CalendarScreen() {
   }, [firstPlannedDate]);
 
   const recurringByDay = useMemo(() => {
-    const map: Record<string, { classTitle: string; location: string; time: string }[]> = {};
+    const map: Record<
+      string,
+      { classId: string; classTitle: string; instructorName: string; location: string; time: string }[]
+    > = {};
     const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
     const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
 
@@ -90,7 +104,9 @@ export default function CalendarScreen() {
           const key = dateKey(cursor);
           if (!map[key]) map[key] = [];
           map[key].push({
+            classId: trainingClass.id,
             classTitle: trainingClass.title,
+            instructorName: instructorNameFor(trainingClass.instructorId),
             location: slot.location,
             time: `${slot.start} - ${slot.end}`,
           });
@@ -99,10 +115,13 @@ export default function CalendarScreen() {
     });
 
     return map;
-  }, [classes, currentMonth]);
+  }, [classes, currentMonth, instructorNameFor]);
 
   const sessionsByDay = useMemo(() => {
-    const map: Record<string, { classTitle: string; location: string; time: string }[]> = Object.fromEntries(
+    const map: Record<
+      string,
+      { classId: string; classTitle: string; instructorName: string; location: string; time: string }[]
+    > = Object.fromEntries(
       Object.entries(recurringByDay).map(([key, value]) => [key, [...value]]),
     );
 
@@ -118,13 +137,15 @@ export default function CalendarScreen() {
         map[key] = [];
       }
       map[key].push({
+        classId: session.classId,
         classTitle: sessionClass?.title ?? 'Aula',
+        instructorName: instructorNameFor(sessionClass?.instructorId),
         location: session.location,
         time,
       });
     });
     return map;
-  }, [classes, recurringByDay, sessions]);
+  }, [classes, instructorNameFor, recurringByDay, sessions]);
 
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const startOffset = (currentMonth.getDay() + 6) % 7; // segunda como início
@@ -222,13 +243,21 @@ export default function CalendarScreen() {
 
           <View style={styles.scheduleList}>
             {classesForDay.map((item, index) => (
-              <ThemedView key={`${selectedKey}-${index}`} style={styles.session}>
-                <View>
-                  <ThemedText type="defaultSemiBold">{item.classTitle}</ThemedText>
-                  <ThemedText style={styles.muted}>{item.location}</ThemedText>
-                </View>
-                <ThemedText type="defaultSemiBold">{item.time}</ThemedText>
-              </ThemedView>
+              <Link key={`${selectedKey}-${index}`} href={item.classId ? `/classes/${item.classId}` : undefined} asChild>
+                <Pressable
+                  style={styles.session}
+                  onPress={() => item.classId && router.push(`/classes/${item.classId}`)}
+                  disabled={!item.classId}>
+                  <View>
+                    <ThemedText type="defaultSemiBold">{item.classTitle}</ThemedText>
+                    <ThemedText style={styles.muted}>{item.location}</ThemedText>
+                    {item.instructorName ? (
+                      <ThemedText style={styles.muted}>Instrutor: {item.instructorName}</ThemedText>
+                    ) : null}
+                  </View>
+                  <ThemedText type="defaultSemiBold">{item.time}</ThemedText>
+                </Pressable>
+              </Link>
             ))}
           </View>
         </ThemedView>

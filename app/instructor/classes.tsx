@@ -4,11 +4,14 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { TrainingClass } from '@/constants/schema';
+import { Colors } from '@/constants/theme';
 import { TopBar } from '@/components/top-bar';
 import { TrainingClass } from '@/constants/schema';
 import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
+import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 
 type ClassFormState = {
   title: string;
@@ -32,6 +35,13 @@ const dateKey = (date: Date) =>
 
 const formatDateInput = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const parseDateOnly = (value?: string | null) => {
+  if (!value) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
 
 const addDays = (date: Date, days: number) => {
   const copy = new Date(date);
@@ -146,13 +156,13 @@ type DateRangeCalendarProps = {
 };
 
 function DateRangeCalendar({ startDate, endDate, onChange }: DateRangeCalendarProps) {
-  const initialVisibleMonth = startDate ? new Date(startDate) : new Date();
+  const initialVisibleMonth = parseDateOnly(startDate) ?? new Date();
   const [visibleMonth, setVisibleMonth] = useState(
     new Date(initialVisibleMonth.getFullYear(), initialVisibleMonth.getMonth(), 1),
   );
 
-  const parsedStart = startDate ? new Date(startDate) : null;
-  const parsedEnd = endDate ? new Date(endDate) : null;
+  const parsedStart = parseDateOnly(startDate);
+  const parsedEnd = parseDateOnly(endDate);
 
   const daysInMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate();
   const startOffset = (visibleMonth.getDay() + 6) % 7;
