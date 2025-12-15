@@ -63,7 +63,7 @@ export default function ClassCatalogScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
-      edges={['top', 'left', 'right', 'bottom']}>
+      edges={['left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
           Encontre sua próxima aula
