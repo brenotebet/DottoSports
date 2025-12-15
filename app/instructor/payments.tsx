@@ -49,7 +49,7 @@ export default function InstructorPaymentsScreen() {
           {classSummaries.map(({ trainingClass, roster, pendingCount, overdueCount }) => (
             <Link
               key={trainingClass.id}
-              href={`/instructor/payments/${trainingClass.id}`}
+              href={{ pathname: '/instructor/payments/[classId]', params: { classId: trainingClass.id } }}
               asChild>
               <Pressable style={styles.balanceRow}>
                 <View style={styles.balanceHeader}>

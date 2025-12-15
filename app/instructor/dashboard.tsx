@@ -88,7 +88,7 @@ export default function InstructorDashboardScreen() {
         <ThemedView style={styles.card}>
           <View style={styles.sectionHeader}>
             <ThemedText type="subtitle">Listas e check-in</ThemedText>
-            <Link href="/instructor/rosters" asChild>
+            <Link href="/instructor/rosters/index" asChild>
               <Pressable style={styles.linkPill}>
                 <ThemedText type="defaultSemiBold" style={styles.linkPillText}>
                   Ver todas as turmas
@@ -103,7 +103,10 @@ export default function InstructorDashboardScreen() {
             <ThemedText style={styles.muted}>Cadastre aulas para acompanhar check-ins.</ThemedText>
           )}
           {classRosterEntries.map(({ trainingClass, roster }) => (
-            <Link key={trainingClass.id} href={`/instructor/rosters/${trainingClass.id}`} asChild>
+            <Link
+              key={trainingClass.id}
+              href={{ pathname: '/instructor/rosters/[classId]', params: { classId: trainingClass.id } }}
+              asChild>
               <Pressable style={styles.rosterCard}>
                 <View style={styles.rosterHeader}>
                   <View>
