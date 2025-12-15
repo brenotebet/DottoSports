@@ -15,8 +15,12 @@ export const options = { headerShown: false };
 
 export default function PaymentsScreen() {
   const { user } = useAuth();
-  const { outstandingBalances, ensureStudentProfile, cardOnFile, payOutstandingPayment } =
-    useInstructorData();
+  const {
+    ensureStudentProfile,
+    cardOnFile,
+    payOutstandingPayment,
+    getStudentAccountSnapshot,
+  } = useInstructorData();
   const [studentId, setStudentId] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
 
@@ -27,16 +31,22 @@ export default function PaymentsScreen() {
     }
   }, [ensureStudentProfile, user]);
 
+  const studentAccount = useMemo(
+    () => (studentId ? getStudentAccountSnapshot(studentId) : null),
+    [getStudentAccountSnapshot, studentId],
+  );
+
   const studentBalances = useMemo(
-    () =>
-      outstandingBalances.filter(
-        (item) => item.student?.id === studentId || item.payment.studentId === studentId,
-      ),
-    [outstandingBalances, studentId],
+    () => studentAccount?.outstanding ?? [],
+    [studentAccount],
   );
 
   const totalDue = useMemo(
-    () => studentBalances.reduce((sum, item) => sum + item.payment.amount, 0),
+    () =>
+      studentBalances.reduce(
+        (sum, item) => sum + item.payment.amount,
+        0,
+      ),
     [studentBalances],
   );
 

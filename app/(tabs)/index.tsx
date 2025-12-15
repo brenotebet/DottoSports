@@ -18,12 +18,11 @@ export default function DashboardScreen() {
   const {
     sessions,
     classes,
-    payments,
-    enrollments,
     ensureStudentProfile,
     getEnrollmentForStudent,
     recordCheckIn,
     getCapacityUsage,
+    getStudentAccountSnapshot,
   } = useInstructorData();
   const [studentId, setStudentId] = useState<string | null>(null);
   const [checkInStatus, setCheckInStatus] = useState<string | null>(null);
@@ -35,12 +34,14 @@ export default function DashboardScreen() {
     }
   }, [ensureStudentProfile, user]);
 
+  const studentAccount = useMemo(
+    () => (studentId ? getStudentAccountSnapshot(studentId) : null),
+    [getStudentAccountSnapshot, studentId],
+  );
+
   const studentEnrollments = useMemo(
-    () =>
-      enrollments.filter(
-        (item) => item.studentId === studentId && item.status !== 'cancelled',
-      ),
-    [enrollments, studentId],
+    () => studentAccount?.enrollments ?? [],
+    [studentAccount],
   );
 
   const upcomingSession = useMemo(() => {
@@ -77,16 +78,14 @@ export default function DashboardScreen() {
     return getEnrollmentForStudent(studentId, upcomingSession.classId) ?? null;
   }, [getEnrollmentForStudent, studentId, upcomingSession]);
 
-  const nextPayment = useMemo(() => {
-    if (!studentId) return null;
-    return payments
-      .filter((payment) => payment.studentId === studentId && payment.status !== 'paid')
-      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
-  }, [payments, studentId]);
+  const nextPayment = studentAccount?.nextPayment;
 
   const highlights = [
     { label: 'Aulas inscritas', value: `${studentEnrollments.length} turmas`, href: '/(tabs)/classes/registered' },
-    { label: 'Próxima cobrança', value: nextPayment ? `Vence ${nextPayment.dueDate}` : 'Nenhuma pendente' },
+    {
+      label: 'Próxima cobrança',
+      value: nextPayment ? `Vence ${nextPayment.payment.dueDate}` : 'Nenhuma pendente',
+    },
     {
       label: 'Check-in rápido',
       value: enrollment ? (enrollment.status === 'waitlist' ? 'Na espera' : 'Liberado') : 'Precisa inscrever',
@@ -188,10 +187,10 @@ export default function DashboardScreen() {
           <ThemedView style={[styles.card, styles.flexItem]}>
             <ThemedText type="subtitle">Próximo pagamento</ThemedText>
             <ThemedText type="title" style={styles.titleSpacing}>
-              {nextPayment ? `R$ ${nextPayment.amount.toFixed(2)}` : 'Nenhum valor aberto'}
+              {nextPayment ? `R$ ${nextPayment.payment.amount.toFixed(2)}` : 'Nenhum valor aberto'}
             </ThemedText>
             <ThemedText>
-              {nextPayment ? `Vencimento ${nextPayment.dueDate}` : 'Tudo em dia no momento.'}
+              {nextPayment ? `Vencimento ${nextPayment.payment.dueDate}` : 'Tudo em dia no momento.'}
             </ThemedText>
           </ThemedView>
           <ThemedView style={[styles.card, styles.flexItem]}>

@@ -121,7 +121,13 @@ export default function SignupScreen() {
 
           <View style={styles.footer}>
             <ThemedText style={[styles.footerText, { color: textColor }]}>Já tem conta?</ThemedText>
-            <Link href="/(auth)/login" style={[styles.footerLink, { color: themeColors.tint }]}>Entrar</Link>
+            <Link href="/(auth)/login" asChild>
+              <Pressable style={styles.footerButton}>
+                <ThemedText type="defaultSemiBold" style={styles.footerButtonText}>
+                  Entrar
+                </ThemedText>
+              </Pressable>
+            </Link>
           </View>
         </View>
       </ThemedView>
@@ -183,7 +189,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
   },
-  footerLink: {
-    fontWeight: '700',
+  footerButton: {
+    backgroundColor: '#0e9aed',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  footerButtonText: {
+    color: '#0b3b5a',
   },
 });
