@@ -161,12 +161,13 @@ export default function CalendarScreen() {
     return (
       <Pressable
         key={key}
-        style={[styles.dayCell, isSelected && styles.dayCellSelected]}
+        style={[styles.dayCell, hasSessions && styles.dayCellHasClasses, isSelected && styles.dayCellSelected]}
         onPress={() => setSelectedDate(cellDate)}>
-        <ThemedText type="defaultSemiBold" style={isSelected && styles.selectedText}>
+        <ThemedText
+          type="defaultSemiBold"
+          style={[hasSessions && styles.dayCellHasClassesText, isSelected && styles.selectedText]}>
           {cellDate.getDate()}
         </ThemedText>
-        {hasSessions && <View style={[styles.dot, isSelected && styles.dotSelected]} />}
       </Pressable>
     );
   };
@@ -289,7 +290,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 12,
     marginVertical: 2,
-    gap: 6,
+  },
+  dayCellHasClasses: {
+    backgroundColor: '#d9eefe',
   },
   dayCellSelected: {
     backgroundColor: '#0e9aed',
@@ -300,14 +303,8 @@ const styles = StyleSheet.create({
   selectedText: {
     color: '#fff',
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#0e9aed',
-  },
-  dotSelected: {
-    backgroundColor: '#fff',
+  dayCellHasClassesText: {
+    color: '#0b3b5a',
   },
   scheduleList: {
     gap: 12,

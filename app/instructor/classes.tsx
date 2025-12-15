@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/themed-view';
 import { TrainingClass } from '@/constants/schema';
 import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
+import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 
 type ClassFormState = {
   title: string;
@@ -21,9 +22,12 @@ type ClassFormState = {
   scheduleStartDate: string;
   scheduleEndDate: string;
   tags: string;
+  instructorId: string;
 };
 
 const weekDayOptions = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+const dateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 const formatDateInput = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -74,6 +78,7 @@ const defaultClassForm: ClassFormState = {
   scheduleStartDate: defaultDateStart,
   scheduleEndDate: defaultDateEnd,
   tags: 'metcon, iniciantes',
+  instructorId: instructorProfiles[0]?.id ?? 'instructor-1',
 };
 
 const createDefaultClassForm = (): ClassFormState => ({
@@ -85,7 +90,7 @@ const createDefaultClassForm = (): ClassFormState => ({
 type DropdownFieldProps = {
   label: string;
   value: string;
-  options: string[];
+  options: { label: string; value: string }[];
   onSelect: (value: string) => void;
 };
 
@@ -96,7 +101,7 @@ function DropdownField({ label, value, options, onSelect }: DropdownFieldProps) 
     <View style={styles.dropdownWrapper}>
       <ThemedText style={styles.dropdownLabel}>{label}</ThemedText>
       <Pressable style={styles.dropdown} onPress={() => setOpen((prev) => !prev)}>
-        <ThemedText>{value || 'Selecionar'}</ThemedText>
+        <ThemedText>{options.find((option) => option.value === value)?.label || 'Selecionar'}</ThemedText>
         <ThemedText style={styles.dropdownCaret}>{open ? '▴' : '▾'}</ThemedText>
       </Pressable>
       {open && (
@@ -104,18 +109,148 @@ function DropdownField({ label, value, options, onSelect }: DropdownFieldProps) 
           <ScrollView style={{ maxHeight: 180 }}>
             {options.map((option) => (
               <Pressable
-                key={option}
-                style={[styles.dropdownOption, option === value && styles.dropdownOptionActive]}
+                key={option.value}
+                style={[styles.dropdownOption, option.value === value && styles.dropdownOptionActive]}
                 onPress={() => {
-                  onSelect(option);
+                  onSelect(option.value);
                   setOpen(false);
                 }}>
-                <ThemedText type="defaultSemiBold">{option}</ThemedText>
+                <ThemedText type="defaultSemiBold">{option.label}</ThemedText>
               </Pressable>
             ))}
           </ScrollView>
         </ThemedView>
       )}
+    </View>
+  );
+}
+
+const coachOptions = seedAccounts
+  .filter((account) => account.role === 'INSTRUCTOR')
+  .map((account) => {
+    const instructorProfile = instructorProfiles.find((profile) => profile.userId === account.id);
+    return {
+      id: instructorProfile?.id ?? account.id,
+      label: instructorProfile?.fullName ?? account.displayName ?? account.email,
+    };
+  });
+
+const isSameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+type DateRangeCalendarProps = {
+  startDate: string;
+  endDate: string;
+  onChange: (start: string, end: string) => void;
+};
+
+function DateRangeCalendar({ startDate, endDate, onChange }: DateRangeCalendarProps) {
+  const initialVisibleMonth = startDate ? new Date(startDate) : new Date();
+  const [visibleMonth, setVisibleMonth] = useState(
+    new Date(initialVisibleMonth.getFullYear(), initialVisibleMonth.getMonth(), 1),
+  );
+
+  const parsedStart = startDate ? new Date(startDate) : null;
+  const parsedEnd = endDate ? new Date(endDate) : null;
+
+  const daysInMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate();
+  const startOffset = (visibleMonth.getDay() + 6) % 7;
+  const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+
+  const handleSelectDate = (day: number) => {
+    const selectedDate = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
+
+    if (!parsedStart || (parsedStart && parsedEnd)) {
+      onChange(formatDateInput(selectedDate), '');
+      return;
+    }
+
+    if (selectedDate < parsedStart) {
+      onChange(formatDateInput(selectedDate), formatDateInput(parsedStart));
+      return;
+    }
+
+    onChange(formatDateInput(parsedStart), formatDateInput(selectedDate));
+  };
+
+  const renderDayCell = (cellDate: Date | null, index: number) => {
+    if (!cellDate) {
+      return <View key={`empty-${index}`} style={[styles.dayCell, styles.dayCellEmpty]} />;
+    }
+
+    const isStart = parsedStart && isSameDay(cellDate, parsedStart);
+    const isEnd = parsedEnd && isSameDay(cellDate, parsedEnd);
+    const isInRange =
+      parsedStart && parsedEnd && cellDate > parsedStart && cellDate < parsedEnd;
+
+    const isSelected = isStart || isEnd;
+
+    return (
+      <Pressable
+        key={dateKey(cellDate)}
+        style={[
+          styles.dayCell,
+          (isSelected || isInRange) && styles.rangeCell,
+          isSelected && styles.rangeEdge,
+        ]}
+        onPress={() => handleSelectDate(cellDate.getDate())}>
+        <ThemedText
+          type="defaultSemiBold"
+          style={[(isSelected || isInRange) && styles.rangeCellText, isSelected && styles.rangeEdgeText]}>
+          {cellDate.getDate()}
+        </ThemedText>
+      </Pressable>
+    );
+  };
+
+  const calendarCells = useMemo(() => {
+    return Array.from({ length: totalCells }).map((_, index) => {
+      const dayNumber = index - startOffset + 1;
+      if (dayNumber < 1 || dayNumber > daysInMonth) {
+        return null;
+      }
+      return new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), dayNumber);
+    });
+  }, [daysInMonth, startOffset, totalCells, visibleMonth]);
+
+  const monthNames = [
+    'janeiro',
+    'fevereiro',
+    'março',
+    'abril',
+    'maio',
+    'junho',
+    'julho',
+    'agosto',
+    'setembro',
+    'outubro',
+    'novembro',
+    'dezembro',
+  ];
+
+  return (
+    <View style={styles.rangePicker}>
+      <View style={styles.monthHeader}>
+        <Pressable onPress={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() - 1, 1))} style={styles.monthButton}>
+          <ThemedText type="defaultSemiBold">‹</ThemedText>
+        </Pressable>
+        <ThemedText type="defaultSemiBold" style={styles.monthTitle}>
+          {monthNames[visibleMonth.getMonth()]} {visibleMonth.getFullYear()}
+        </ThemedText>
+        <Pressable onPress={() => setVisibleMonth(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 1))} style={styles.monthButton}>
+          <ThemedText type="defaultSemiBold">›</ThemedText>
+        </Pressable>
+      </View>
+
+      <View style={styles.weekRow}>
+        {weekDayOptions.map((day) => (
+          <ThemedText key={`week-${day}`} style={[styles.weekDay, styles.muted]}>
+            {day}
+          </ThemedText>
+        ))}
+      </View>
+
+      <View style={styles.grid}>{calendarCells.map(renderDayCell)}</View>
     </View>
   );
 }
@@ -176,6 +311,11 @@ export default function InstructorClassesScreen() {
       setClassForm((prev) => ({ ...prev, scheduleEnd: availableEndTimes[0] }));
     }
   }, [availableEndTimes, classForm.scheduleEnd]);
+
+  const coachNameForId = useCallback(
+    (id?: string) => coachOptions.find((coach) => coach.id === id)?.label ?? 'Coach',
+    [],
+  );
 
   const confirmAction = (title: string, message: string, onConfirm: () => void) => {
     Alert.alert(title, message, [
@@ -251,7 +391,7 @@ export default function InstructorClassesScreen() {
         },
       ],
       tags: classForm.tags.split(',').map((tag) => tag.trim()).filter(Boolean),
-      instructorId: 'instructor-1',
+      instructorId: classForm.instructorId,
     };
 
     const isEditing = Boolean(editingClassId);
@@ -292,6 +432,7 @@ export default function InstructorClassesScreen() {
       scheduleStartDate: target.schedule[0]?.startDate ?? defaultDateStart,
       scheduleEndDate: target.schedule[0]?.endDate ?? defaultDateEnd,
       tags: target.tags.join(', '),
+      instructorId: target.instructorId ?? instructorProfiles[0]?.id ?? 'instructor-1',
     });
     setClassErrors({});
     setEditingClassId(id);
@@ -318,7 +459,7 @@ export default function InstructorClassesScreen() {
       <TopBar title="Aulas" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
-          Aulas e sessões
+          Aulas recorrentes
         </ThemedText>
 
         <ThemedView style={styles.card}>
@@ -350,23 +491,29 @@ export default function InstructorClassesScreen() {
             value={classForm.description}
             onChangeText={(text) => setClassForm((prev) => ({ ...prev, description: text }))}
           />
+          <DropdownField
+            label="Coach responsável"
+            value={classForm.instructorId}
+            options={coachOptions.map((coach) => ({ label: coach.label, value: coach.id }))}
+            onSelect={(coachId) => setClassForm((prev) => ({ ...prev, instructorId: coachId }))}
+          />
           <View style={styles.formRow}>
             <DropdownField
               label="Dia da semana"
               value={classForm.scheduleDay}
-              options={weekDayOptions}
+              options={weekDayOptions.map((day) => ({ label: day, value: day }))}
               onSelect={(day) => setClassForm((prev) => ({ ...prev, scheduleDay: day }))}
             />
             <DropdownField
               label="Horário de início"
               value={classForm.scheduleStart}
-              options={availableStartTimes}
+              options={availableStartTimes.map((time) => ({ label: time, value: time }))}
               onSelect={(start) => setClassForm((prev) => ({ ...prev, scheduleStart: start }))}
             />
             <DropdownField
               label="Horário de término"
               value={classForm.scheduleEnd}
-              options={availableEndTimes}
+              options={availableEndTimes.map((time) => ({ label: time, value: time }))}
               onSelect={(end) => setClassForm((prev) => ({ ...prev, scheduleEnd: end }))}
             />
           </View>
@@ -375,20 +522,30 @@ export default function InstructorClassesScreen() {
               {classErrors.scheduleDay ?? classErrors.scheduleStart ?? classErrors.scheduleEnd}
             </ThemedText>
           )}
-          <View style={styles.formRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="Data inicial (YYYY-MM-DD)"
-              value={classForm.scheduleStartDate}
-              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleStartDate: text }))}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Data final (YYYY-MM-DD)"
-              value={classForm.scheduleEndDate}
-              onChangeText={(text) => setClassForm((prev) => ({ ...prev, scheduleEndDate: text }))}
-            />
+          <View style={styles.rangeRow}>
+            <View style={{ flex: 1 }}>
+              <ThemedText type="defaultSemiBold">Período de vigência</ThemedText>
+              <ThemedText style={styles.muted}>
+                Selecione datas de início e fim para que a aula apareça no calendário.
+              </ThemedText>
+              <ThemedText type="defaultSemiBold" style={styles.rangeSummary}>
+                {classForm.scheduleStartDate && classForm.scheduleEndDate
+                  ? `${classForm.scheduleStartDate} até ${classForm.scheduleEndDate}`
+                  : 'Escolha um intervalo'}
+              </ThemedText>
+            </View>
           </View>
+          <DateRangeCalendar
+            startDate={classForm.scheduleStartDate}
+            endDate={classForm.scheduleEndDate}
+            onChange={(start, end) =>
+              setClassForm((prev) => ({
+                ...prev,
+                scheduleStartDate: start,
+                scheduleEndDate: end,
+              }))
+            }
+          />
           {(classErrors.scheduleStartDate || classErrors.scheduleEndDate) && (
             <ThemedText style={styles.errorText}>
               {classErrors.scheduleStartDate ?? classErrors.scheduleEndDate}
@@ -434,6 +591,9 @@ export default function InstructorClassesScreen() {
                   <ThemedText type="defaultSemiBold">{trainingClass.title}</ThemedText>
                   <ThemedText style={styles.muted}>
                     {trainingClass.category} · {trainingClass.level} · Capacidade {trainingClass.capacity}
+                  </ThemedText>
+                  <ThemedText style={styles.muted}>
+                    Coach: {coachNameForId(trainingClass.instructorId)}
                   </ThemedText>
                   <ThemedText style={styles.muted}>
                     {trainingClass.schedule
@@ -502,6 +662,12 @@ const styles = StyleSheet.create({
     gap: 10,
     flexWrap: 'wrap',
     alignItems: 'flex-start',
+  },
+  rangeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    flexWrap: 'wrap',
   },
   dropdownWrapper: {
     flex: 1,
@@ -633,5 +799,67 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
+  },
+  rangePicker: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+    padding: 12,
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  rangeSummary: {
+    marginTop: 6,
+  },
+  weekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  weekDay: {
+    width: `${100 / 7}%`,
+    textAlign: 'center',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    marginVertical: 2,
+    gap: 6,
+  },
+  dayCellEmpty: {
+    opacity: 0.4,
+  },
+  rangeCell: {
+    backgroundColor: '#dff1ff',
+  },
+  rangeCellText: {
+    color: '#0b3b5a',
+  },
+  rangeEdge: {
+    backgroundColor: '#0e9aed',
+  },
+  rangeEdgeText: {
+    color: '#fff',
+  },
+  monthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  monthButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#d9eefe',
+  },
+  monthTitle: {
+    textTransform: 'capitalize',
   },
 });
