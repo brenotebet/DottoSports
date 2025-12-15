@@ -9,8 +9,6 @@ import { Colors } from '@/constants/theme';
 import { useAuth } from '@/providers/auth-provider';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
-export const options = { headerShown: false };
-
 export default function RegisteredClassesScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -61,12 +59,23 @@ export default function RegisteredClassesScreen() {
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
       edges={['top', 'left', 'right', 'bottom']}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <ThemedText type="title" style={styles.heading}>
-          Minhas aulas
-        </ThemedText>
-        <ThemedText style={styles.leadText}>
-          Revise suas inscrições, confira o próximo horário e acesse os detalhes da turma com um toque.
-        </ThemedText>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <ThemedText type="title" style={styles.heading}>
+              Minhas aulas
+            </ThemedText>
+            <ThemedText style={styles.leadText}>
+              Revise suas inscrições, confira o próximo horário e acesse os detalhes da turma com um toque.
+            </ThemedText>
+          </View>
+          <Link href="/(tabs)/classes" asChild>
+            <Pressable style={styles.catalogButton}>
+              <ThemedText type="defaultSemiBold" style={styles.catalogButtonText}>
+                Ver catálogo
+              </ThemedText>
+            </Pressable>
+          </Link>
+        </View>
 
         <View style={styles.list}>
           {enrolledClasses.map(({ trainingClass, enrollment }) => {
@@ -142,6 +151,11 @@ const styles = StyleSheet.create({
   heading: {
     marginBottom: 4,
   },
+  headerRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
   leadText: {
     opacity: 0.75,
     lineHeight: 20,
@@ -207,5 +221,15 @@ const styles = StyleSheet.create({
   },
   resetButtonText: {
     color: '#0b3b5a',
+  },
+  catalogButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#022a4c',
+  },
+  catalogButtonText: {
+    color: '#f0f8ff',
   },
 });

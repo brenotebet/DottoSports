@@ -295,11 +295,11 @@ const styles = StyleSheet.create({
   },
   highlightGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexWrap: 'nowrap',
     gap: 12,
   },
   highlightItem: {
-    width: '48%',
+    flex: 1,
     padding: 12,
     borderRadius: 12,
     backgroundColor: '#f0f8ff',

@@ -9,8 +9,6 @@ import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
-export const options = { headerShown: false };
-
 export default function ClassCatalogScreen() {
   const colorScheme = useColorScheme();
   const { classes, sessions, getCapacityUsage } = useInstructorData();
