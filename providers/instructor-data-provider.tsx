@@ -59,7 +59,12 @@ export type CardOnFile = {
 
 type SystemEvent = {
   id: string;
-  type: 'enrollment_created' | 'payment_posted' | 'attendance_marked' | 'validation_error';
+  type:
+    | 'enrollment_created'
+    | 'payment_posted'
+    | 'attendance_marked'
+    | 'validation_error'
+    | 'enrollment_cancelled';
   message: string;
   timestamp: string;
   context?: Record<string, unknown>;
@@ -513,13 +518,19 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const dueDateFormatted = dueDate.toISOString().slice(0, 10);
       const description = `${option.weeklyClasses}x semana · ${option.durationMonths}m (${billing === 'recurring' ? 'mensal' : 'à vista'})`;
 
-      let targetedPaymentId: string | null = null;
+      const existingEnrollmentId = enrollments.find(
+        (enrollment) => enrollment.studentId === studentId && enrollment.status === 'active',
+      )?.id;
+
+      let targetedPaymentId: string | undefined;
+      let targetedEnrollmentId: string | undefined = existingEnrollmentId;
 
       setPayments((prev) => {
         let updated = false;
         const next = prev.map((payment) => {
           if (payment.studentId === studentId && payment.status !== 'paid' && !updated) {
             targetedPaymentId = payment.id;
+            targetedEnrollmentId = payment.enrollmentId ?? targetedEnrollmentId;
             updated = true;
             return {
               ...payment,
@@ -546,6 +557,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           };
 
           targetedPaymentId = payment.id;
+          targetedEnrollmentId = payment.enrollmentId ?? targetedEnrollmentId;
           next.push(payment);
         }
 
@@ -556,11 +568,14 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       if (!targetedPaymentId) return;
 
+      const paymentId = targetedPaymentId!;
+      const enrollmentId = targetedEnrollmentId ?? `${studentId}-unassigned-plan`;
+
       setInvoices((prev) => {
-        const existing = prev.find((invoice) => invoice.paymentId === targetedPaymentId);
+        const existing = prev.find((invoice) => invoice.paymentId === paymentId);
         if (existing) {
           return prev.map((invoice) =>
-            invoice.paymentId === targetedPaymentId
+            invoice.paymentId === paymentId
               ? {
                   ...invoice,
                   issueDate: issueDateFormatted,
@@ -574,7 +589,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
         const invoice: Invoice = {
           id: generateId('invoice'),
-          paymentId: targetedPaymentId,
+          paymentId,
+          enrollmentId,
           issueDate: issueDateFormatted,
           reference: `${issueDate.getMonth() + 1}/${issueDate.getFullYear()} - Plano semanal`,
           total: amount,
@@ -587,20 +603,20 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       setPaymentIntents((prev) =>
         prev.map((intent) =>
-          intent.paymentId === targetedPaymentId
-            ? { ...intent, amount }
+          intent.paymentId === paymentId
+            ? { ...intent, amount, enrollmentId }
             : intent,
         ),
       );
 
       logEvent('payment_posted', 'Cobrança atualizada para refletir novo plano.', {
         studentId,
-        paymentId: targetedPaymentId,
+        paymentId,
         amount,
         billing,
       });
     },
-    [logEvent],
+    [enrollments, logEvent],
   );
 
   const selectPlanForStudent = useCallback(
@@ -1519,7 +1535,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       createGoal,
       updateGoal,
       deleteGoal,
-      getStudentProfileForEmail,
       getStudentEvaluations,
     }),
     [
