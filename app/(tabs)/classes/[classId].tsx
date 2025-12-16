@@ -27,11 +27,11 @@ export default function ClassDetailsScreen() {
     getWeeklyUsageForStudent,
     bookSessionForStudent,
     isSessionBooked,
+    getActivePlanForStudent,
   } = useInstructorData();
 
   const [statusMessage, setStatusMessage] = useState('');
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
-  const [totalPrice] = useState(120);
   const insets = useSafeAreaInsets();
 
   const currentWeekUsage = useMemo(
@@ -88,22 +88,28 @@ export default function ClassDetailsScreen() {
   const handleEnroll = () => {
     if (!currentStudentId) return;
     confirmAction('Confirmar inscrição', 'Tem certeza que deseja se inscrever nesta aula?', () => {
-      const result = enrollStudentInClass(currentStudentId, trainingClass.id);
-      if (result.alreadyEnrolled) {
-        const message = 'Você já está inscrito nesta aula.';
-        setStatusMessage(message);
-        Alert.alert('Nenhuma alteração', message);
-        return;
-      }
+      try {
+        const result = enrollStudentInClass(currentStudentId, trainingClass.id);
+        if (result.alreadyEnrolled) {
+          const message = 'Você já está inscrito nesta aula.';
+          setStatusMessage(message);
+          Alert.alert('Nenhuma alteração', message);
+          return;
+        }
 
-      if (result.isWaitlist) {
-        const message = 'Capacidade cheia. Você entrou na lista de espera.';
+        if (result.isWaitlist) {
+          const message = 'Capacidade cheia. Você entrou na lista de espera.';
+          setStatusMessage(message);
+          Alert.alert('Inscrição processada', message);
+        } else {
+          const message = 'Inscrição confirmada! Você já tem vaga nesta turma.';
+          setStatusMessage(message);
+          Alert.alert('Inscrição confirmada', message);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Não foi possível concluir a inscrição.';
         setStatusMessage(message);
-        Alert.alert('Inscrição processada', message);
-      } else {
-        const message = 'Inscrição confirmada! Você já tem vaga nesta turma.';
-        setStatusMessage(message);
-        Alert.alert('Inscrição confirmada', message);
+        Alert.alert('Inscrição bloqueada', message);
       }
     });
   };
@@ -132,6 +138,10 @@ export default function ClassDetailsScreen() {
       Alert.alert('Inscrição cancelada', message);
     });
   };
+
+  const activePlan = currentStudentId ? getActivePlanForStudent(currentStudentId) : undefined;
+  const remainingThisWeek = currentWeekUsage?.remaining ?? 0;
+  const canEnroll = Boolean(currentStudentId && activePlan && remainingThisWeek > 0);
 
   return (
     <SafeAreaView style={[styles.safeArea ,{paddingTop: insets.top}]} edges={['left', 'right', 'bottom']}>
@@ -181,19 +191,24 @@ export default function ClassDetailsScreen() {
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Inscrição</ThemedText>
           <ThemedText style={styles.muted}>
-            Para confirmar sua vaga precisamos vincular sua conta e respeitar a capacidade da turma.
+            As reservas usam apenas seu saldo semanal de aulas do plano ativo. Não geramos cobranças extras na
+            inscrição.
           </ThemedText>
-          <ThemedText style={styles.priceRow}>
-            Valor total estimado: <ThemedText type="defaultSemiBold">R$ {totalPrice.toFixed(2)}</ThemedText>
-          </ThemedText>
-          <ThemedText style={styles.muted}>
-            O pagamento é feito pelo menu em &quot;Realizar pagamento&quot; quando estiver disponível.
-          </ThemedText>
-          <Pressable style={styles.primaryButton} onPress={handleEnroll} disabled={!currentStudentId}>
+          <Pressable style={[styles.primaryButton, !canEnroll && styles.primaryButtonDisabled]} onPress={handleEnroll} disabled={!canEnroll}>
             <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
               {existingEnrollment ? 'Atualizar inscrição' : 'Inscrever nesta aula'}
             </ThemedText>
           </Pressable>
+          {!activePlan && (
+            <ThemedText style={styles.muted}>
+              Adquira um plano para se inscrever e reservar horários.
+            </ThemedText>
+          )}
+          {activePlan && remainingThisWeek <= 0 && (
+            <ThemedText style={styles.muted}>
+              Limite semanal atingido. Você poderá se inscrever novamente na próxima semana ou ao reforçar seu plano.
+            </ThemedText>
+          )}
           {existingEnrollment ? (
             <Pressable style={styles.secondaryButton} onPress={handleUnregister}>
               <ThemedText type="defaultSemiBold" style={styles.secondaryButtonText}>
@@ -347,9 +362,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-  },
-  priceRow: {
-    marginTop: 4,
   },
   primaryButton: {
     backgroundColor: '#0e9aed',

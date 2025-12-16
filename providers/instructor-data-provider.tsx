@@ -546,13 +546,23 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const limit = (activePlan?.planOptionId
         ? planOptions.find((item) => item.id === activePlan.planOptionId)?.weeklyClasses ?? 0
         : 0) + reinstated;
-      const used = sessionBookings.filter(
+
+      const bookingsThisWeek = sessionBookings.filter(
         (booking) => booking.studentId === studentId && booking.weekStart === weekStart && booking.status === 'booked',
       ).length;
 
+      const enrollmentsThisWeek = enrollments.filter(
+        (enrollment) =>
+          enrollment.studentId === studentId &&
+          enrollment.status !== 'cancelled' &&
+          startOfWeekIso(new Date(enrollment.createdAt)) === weekStart,
+      ).length;
+
+      const used = Math.max(bookingsThisWeek, enrollmentsThisWeek);
+
       return { used, limit, remaining: Math.max(limit - used, 0), weekStart };
     },
-    [creditReinstatements, getActivePlanForStudent, planOptions, sessionBookings],
+    [creditReinstatements, enrollments, getActivePlanForStudent, planOptions, sessionBookings],
   );
 
   const isSessionBooked = useCallback(
@@ -632,6 +642,21 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const enrollStudentInClass = useCallback(
     (studentId: string, classId: string) => {
+      const activePlan = getActivePlanForStudent(studentId);
+      const weeklyUsage = getWeeklyUsageForStudent(studentId);
+
+      if (!activePlan) {
+        const message = 'Um plano ativo é necessário para se inscrever em aulas.';
+        logEvent('validation_error', message, { studentId, classId });
+        throw new Error(message);
+      }
+
+      if (weeklyUsage.limit === 0 || weeklyUsage.remaining <= 0) {
+        const message = 'Limite semanal atingido. Selecione um plano com mais aulas ou espere a próxima semana.';
+        logEvent('validation_error', message, { studentId, classId, weekStart: weeklyUsage.weekStart });
+        throw new Error(message);
+      }
+
       const existing = enrollments.find(
         (enrollment) => enrollment.studentId === studentId && enrollment.classId === classId,
       );
@@ -661,6 +686,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         const reactivated: Enrollment = {
           ...existing,
           status: isWaitlist ? 'waitlist' : 'active',
+          createdAt: now,
           updatedAt: now,
         };
 
@@ -695,51 +721,9 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         waitlisted: isWaitlist,
       });
 
-      const hasExistingPayment = payments.some((payment) => payment.enrollmentId === enrollment.id);
-      if (!hasExistingPayment) {
-        const dueDate = new Date(now);
-        dueDate.setDate(dueDate.getDate() + 3);
-
-        const amount = 120;
-        const description = classInfo
-          ? `Mensalidade - ${classInfo.title}`
-          : 'Mensalidade da turma inscrita';
-
-        const payment: Payment = {
-          id: generateId('payment'),
-          studentId,
-          enrollmentId: enrollment.id,
-          amount,
-          currency: 'BRL',
-          method: 'credit_card',
-          status: 'pending',
-          dueDate: dueDate.toISOString().slice(0, 10),
-          description,
-        };
-
-        const invoice: Invoice = {
-          id: generateId('invoice'),
-          paymentId: payment.id,
-          enrollmentId: enrollment.id,
-          issueDate: now.slice(0, 10),
-          reference: `${description} - ${dueDate.getMonth() + 1}/${dueDate.getFullYear()}`,
-          total: amount,
-          currency: 'BRL',
-          status: 'open',
-        };
-
-        setPayments((prev) => [payment, ...prev]);
-        setInvoices((prev) => [invoice, ...prev]);
-        logEvent('payment_posted', 'Cobrança inicial gerada após inscrição.', {
-          paymentId: payment.id,
-          enrollmentId: enrollment.id,
-          status: payment.status,
-          amount,
-        });
-      }
       return { enrollment, isWaitlist, alreadyEnrolled: false };
     },
-    [classes, enrollments, logEvent, payments],
+    [classes, enrollments, getActivePlanForStudent, getWeeklyUsageForStudent, logEvent],
   );
 
   const getCapacityUsage = useCallback(

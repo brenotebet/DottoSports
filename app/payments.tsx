@@ -59,6 +59,48 @@ export default function PaymentsScreen() {
     [planOptions],
   );
 
+  const durationOptions = useMemo(
+    () =>
+      Array.from(new Set(sortedPlanOptions.map((option) => option.durationMonths))).sort((a, b) => a - b),
+    [sortedPlanOptions],
+  );
+
+  const [selectedDuration, setSelectedDuration] = useState<number>(durationOptions[0] ?? 1);
+
+  const availableWeeklyOptions = useMemo(
+    () =>
+      sortedPlanOptions
+        .filter((option) => option.durationMonths === selectedDuration)
+        .map((option) => option.weeklyClasses)
+        .filter((value, index, self) => self.indexOf(value) === index)
+        .sort((a, b) => a - b),
+    [selectedDuration, sortedPlanOptions],
+  );
+
+  const [selectedWeekly, setSelectedWeekly] = useState<number>(availableWeeklyOptions[0] ?? 2);
+
+  useEffect(() => {
+    if (activePlanOption) {
+      setSelectedDuration(activePlanOption.durationMonths);
+      setSelectedWeekly(activePlanOption.weeklyClasses);
+      setBillingCycle(activePlan?.billing ?? 'recurring');
+    }
+  }, [activePlan?.billing, activePlanOption]);
+
+  useEffect(() => {
+    if (!availableWeeklyOptions.includes(selectedWeekly)) {
+      setSelectedWeekly(availableWeeklyOptions[0] ?? selectedWeekly);
+    }
+  }, [availableWeeklyOptions, selectedWeekly]);
+
+  const selectedOption = useMemo(
+    () =>
+      sortedPlanOptions.find(
+        (option) => option.durationMonths === selectedDuration && option.weeklyClasses === selectedWeekly,
+      ),
+    [selectedDuration, selectedWeekly, sortedPlanOptions],
+  );
+
   const studentBalances = useMemo(
     () => studentAccount?.outstanding ?? [],
     [studentAccount],
@@ -92,7 +134,7 @@ export default function PaymentsScreen() {
     try {
       selectPlanForStudent(studentId, planOptionId, billingCycle);
       Alert.alert(
-        'Plano salvo',
+        activePlan ? 'Plano atualizado' : 'Plano salvo',
         billingCycle === 'recurring'
           ? 'Cobraremos mensalmente este plano com recorrência automática.'
           : 'Plano pago à vista selecionado. Ajuste de cobrança registrado.',
@@ -104,6 +146,18 @@ export default function PaymentsScreen() {
   };
 
   const nextDue = studentBalances[0]?.payment.dueDate;
+  const amountDue = selectedOption
+    ? billingCycle === 'recurring'
+      ? selectedOption.priceMonthly
+      : selectedOption.priceUpfront
+    : 0;
+
+  const selectionMatchesActive = Boolean(
+    activePlanOption &&
+      activePlan?.billing === billingCycle &&
+      activePlanOption.durationMonths === selectedDuration &&
+      activePlanOption.weeklyClasses === selectedWeekly,
+  );
 
   return (
     <SafeAreaView
@@ -163,37 +217,73 @@ export default function PaymentsScreen() {
               <ThemedText type="defaultSemiBold">Plano atual</ThemedText>
               <ThemedText style={styles.muted}>
                 {activePlanOption.weeklyClasses}x na semana · {activePlanOption.durationMonths} meses ·{' '}
-                {billingCycle === 'recurring'
+                {activePlan?.billing === 'recurring'
                   ? `R$ ${activePlanOption.priceMonthly.toFixed(0)}/mês`
                   : `R$ ${activePlanOption.priceUpfront.toFixed(0)} à vista`}
               </ThemedText>
             </ThemedView>
           ) : null}
 
-          <View style={styles.planGrid}>
-            {sortedPlanOptions.map((option) => {
-              const price = billingCycle === 'recurring' ? option.priceMonthly : option.priceUpfront;
-              const isActive = option.id === activePlan?.planOptionId;
-              return (
-                <Pressable
-                  key={option.id}
-                  style={[styles.planCard, isActive && styles.planCardActive]}
-                  onPress={() => handleSelectPlan(option.id)}>
-                  <ThemedText type="defaultSemiBold">{option.weeklyClasses}x na semana</ThemedText>
-                  <ThemedText style={styles.muted}>{option.durationMonths} meses</ThemedText>
-                  <ThemedText type="title" style={styles.planPrice}>R$ {price.toFixed(0)}</ThemedText>
-                  <ThemedText style={styles.muted}>
-                    {billingCycle === 'recurring' ? 'por mês (recorrente)' : 'total à vista'}
-                  </ThemedText>
-                  {isActive && (
-                    <ThemedText type="defaultSemiBold" style={styles.planActiveLabel}>
-                      Selecionado
+          <View style={styles.dropdownGroup}>
+            <View style={styles.dropdownField}>
+              <ThemedText type="defaultSemiBold">Duração</ThemedText>
+              <ThemedText style={styles.muted}>Edite seu plano sem adicionar novas assinaturas.</ThemedText>
+              <View style={styles.dropdownOptions}>
+                {durationOptions.map((option) => (
+                  <Pressable
+                    key={option}
+                    style={[styles.dropdownChip, selectedDuration === option && styles.dropdownChipActive]}
+                    onPress={() => setSelectedDuration(option)}>
+                    <ThemedText
+                      type="defaultSemiBold"
+                      style={selectedDuration === option ? styles.dropdownTextActive : undefined}>
+                      {option} mês{option > 1 ? 'es' : ''}
                     </ThemedText>
-                  )}
-                </Pressable>
-              );
-            })}
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.dropdownField}>
+              <ThemedText type="defaultSemiBold">Aulas por semana</ThemedText>
+              <ThemedText style={styles.muted}>Mostramos apenas opções disponíveis para esta duração.</ThemedText>
+              <View style={styles.dropdownOptions}>
+                {availableWeeklyOptions.map((option) => (
+                  <Pressable
+                    key={`${selectedDuration}-${option}`}
+                    style={[styles.dropdownChip, selectedWeekly === option && styles.dropdownChipActive]}
+                    onPress={() => setSelectedWeekly(option)}>
+                    <ThemedText
+                      type="defaultSemiBold"
+                      style={selectedWeekly === option ? styles.dropdownTextActive : undefined}>
+                      {option}x na semana
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
           </View>
+
+          <ThemedView style={styles.amountCard}>
+            <View style={{ flex: 1 }}>
+              <ThemedText type="subtitle">Valor a pagar</ThemedText>
+              <ThemedText style={styles.muted}>
+                {billingCycle === 'recurring'
+                  ? 'Cobraremos este valor mensalmente enquanto o plano estiver ativo.'
+                  : 'Cobrança única antecipada para todo o período selecionado.'}
+              </ThemedText>
+            </View>
+            <ThemedText type="title">R$ {amountDue.toFixed(0)}</ThemedText>
+          </ThemedView>
+
+          <Pressable
+            style={[styles.payButton, (!selectedOption || selectionMatchesActive) && styles.payButtonDisabled]}
+            disabled={!selectedOption || selectionMatchesActive}
+            onPress={() => selectedOption && handleSelectPlan(selectedOption.id)}>
+            <ThemedText type="defaultSemiBold" style={styles.payButtonText}>
+              {selectedOption ? (activePlan ? 'Atualizar plano' : 'Confirmar plano') : 'Selecione uma combinação'}
+            </ThemedText>
+          </Pressable>
         </ThemedView>
 
         <ThemedView style={styles.card}>
@@ -337,31 +427,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#cde3f5',
   },
-  planGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+  dropdownGroup: {
+    gap: 14,
   },
-  planCard: {
-    flexGrow: 1,
-    minWidth: '45%',
+  dropdownField: {
     backgroundColor: '#fff',
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#dbe8f5',
-    gap: 4,
+    gap: 8,
   },
-  planCardActive: {
+  dropdownOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dropdownChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cde3f5',
+    backgroundColor: '#f7fbff',
+  },
+  dropdownChipActive: {
+    backgroundColor: '#0e9aed',
     borderColor: '#0e9aed',
-    backgroundColor: '#dff3ff',
   },
-  planPrice: {
-    color: '#0b3b5a',
+  dropdownTextActive: {
+    color: '#fff',
   },
-  planActiveLabel: {
-    marginTop: 2,
-    color: '#0b3b5a',
+  amountCard: {
+    marginTop: 6,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#f0f8ff',
+    borderWidth: 1,
+    borderColor: '#dbe8f5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   cardActions: {
     flexDirection: 'row',
@@ -416,6 +522,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
+  },
+  payButtonDisabled: {
+    backgroundColor: '#c5d7e7',
   },
   payButtonText: {
     color: '#fff',
