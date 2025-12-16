@@ -15,6 +15,10 @@ import type {
   Settlement,
   StudentProfile,
   TrainingClass,
+  PlanOption,
+  StudentPlan,
+  SessionBooking,
+  CreditReinstatement,
 } from '@/constants/schema';
 import {
   attendance as seedAttendance,
@@ -29,6 +33,10 @@ import {
   receipts as seedReceipts,
   settlements as seedSettlements,
   sessions as seedSessions,
+  planOptions as seedPlanOptions,
+  studentPlans as seedStudentPlans,
+  sessionBookings as seedSessionBookings,
+  creditReinstatements as seedCreditReinstatements,
   studentProfiles,
   seedAccounts,
 } from '@/constants/seed-data';
@@ -92,6 +100,10 @@ type InstructorDataContextValue = {
   paymentSessions: PaymentSession[];
   receipts: Receipt[];
   settlements: Settlement[];
+  planOptions: PlanOption[];
+  studentPlans: StudentPlan[];
+  sessionBookings: SessionBooking[];
+  creditReinstatements: CreditReinstatement[];
   evaluations: Evaluation[];
   goals: Goal[];
   events: SystemEvent[];
@@ -125,6 +137,15 @@ type InstructorDataContextValue = {
     enrollmentId: string,
     status: Attendance['status'],
   ) => void;
+  getActivePlanForStudent: (studentId: string) => StudentPlan | undefined;
+  selectPlanForStudent: (studentId: string, planOptionId: string, billing: StudentPlan['billing']) => StudentPlan;
+  getWeeklyUsageForStudent: (
+    studentId: string,
+    referenceDate?: Date,
+  ) => { used: number; limit: number; remaining: number; weekStart: string };
+  isSessionBooked: (sessionId: string, studentId: string) => boolean;
+  bookSessionForStudent: (sessionId: string, studentId: string) => SessionBooking;
+  reinstateClassForWeek: (studentId: string, weekStart: string, amount?: number, notes?: string) => CreditReinstatement;
   recordCheckIn: (sessionId: string, enrollmentId: string, method: 'qr' | 'manual') => Attendance;
   chargeStoredCard: (studentId: string, amount: number, description: string) => Payment;
   createOneTimePayment: (
@@ -233,6 +254,15 @@ const resolvePaymentLedger = (
     .sort((a, b) => new Date(a.payment.dueDate).getTime() - new Date(b.payment.dueDate).getTime());
 };
 
+const startOfWeekIso = (date: Date) => {
+  const copy = new Date(date);
+  const day = copy.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  copy.setDate(copy.getDate() + diff);
+  copy.setHours(0, 0, 0, 0);
+  return copy.toISOString();
+};
+
 const defaultCard: CardOnFile = {
   brand: 'Visa',
   last4: '4242',
@@ -257,6 +287,10 @@ type PersistedInstructorData = {
   students: StudentProfile[];
   evaluations: Evaluation[];
   goals: Goal[];
+  planOptions: PlanOption[];
+  studentPlans: StudentPlan[];
+  sessionBookings: SessionBooking[];
+  creditReinstatements: CreditReinstatement[];
   cardOnFile: CardOnFile;
   events: SystemEvent[];
 };
@@ -295,6 +329,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [settlements, setSettlements] = useState<Settlement[]>(seedSettlements);
   const [evaluations, setEvaluations] = useState<Evaluation[]>(seedEvaluations);
   const [goals, setGoals] = useState<Goal[]>(seedGoals);
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>(seedPlanOptions);
+  const [studentPlans, setStudentPlans] = useState<StudentPlan[]>(seedStudentPlans);
+  const [sessionBookings, setSessionBookings] = useState<SessionBooking[]>(seedSessionBookings);
+  const [creditReinstatements, setCreditReinstatements] = useState<CreditReinstatement[]>(seedCreditReinstatements);
   const [students, setStudents] = useState<StudentProfile[]>(studentProfiles);
   const [cardOnFile, setCardOnFile] = useState<CardOnFile>(defaultCard);
   const [events, setEvents] = useState<SystemEvent[]>([]);
@@ -339,6 +377,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         if (storedData.settlements) setSettlements(storedData.settlements);
         if (storedData.evaluations) setEvaluations(storedData.evaluations);
         if (storedData.goals) setGoals(storedData.goals);
+        if (storedData.planOptions) setPlanOptions(storedData.planOptions);
+        if (storedData.studentPlans) setStudentPlans(storedData.studentPlans);
+        if (storedData.sessionBookings) setSessionBookings(storedData.sessionBookings);
+        if (storedData.creditReinstatements) setCreditReinstatements(storedData.creditReinstatements);
         if (storedData.students) setStudents(storedData.students);
         if (storedData.cardOnFile) setCardOnFile(storedData.cardOnFile);
         if (storedData.events) setEvents(storedData.events);
@@ -369,6 +411,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         settlements,
         evaluations,
         goals,
+        planOptions,
+        studentPlans,
+        sessionBookings,
+        creditReinstatements,
         students,
         cardOnFile,
         events,
@@ -394,6 +440,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     sessions,
     settlements,
     students,
+    planOptions,
+    studentPlans,
+    sessionBookings,
+    creditReinstatements,
   ]);
 
   const ensureStudentProfile = useCallback((email: string, displayName: string) => {
@@ -442,6 +492,136 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const getStudentProfileForEmail = useCallback(
     (email: string, displayName?: string) => ensureStudentProfile(email, displayName ?? email),
     [ensureStudentProfile],
+  );
+
+  const getActivePlanForStudent = useCallback(
+    (studentId: string) =>
+      studentPlans.find(
+        (plan) => plan.studentId === studentId && plan.status === 'active',
+      ),
+    [studentPlans],
+  );
+
+  const selectPlanForStudent = useCallback(
+    (studentId: string, planOptionId: string, billing: StudentPlan['billing']) => {
+      const option = planOptions.find((item) => item.id === planOptionId);
+      if (!option) {
+        throw new Error('Plano selecionado não encontrado.');
+      }
+
+      const now = new Date();
+      const newPlan: StudentPlan = {
+        id: generateId('plan'),
+        studentId,
+        planOptionId,
+        billing,
+        startDate: now.toISOString(),
+        endDate: new Date(now.getFullYear(), now.getMonth() + option.durationMonths, now.getDate()).toISOString(),
+        status: 'active',
+      };
+
+      setStudentPlans((prev) => {
+        const filtered = prev.filter((plan) => plan.studentId !== studentId);
+        return [...filtered, newPlan];
+      });
+
+      logEvent('enrollment_created', 'Plano selecionado/atualizado pelo aluno', {
+        studentId,
+        planOptionId,
+        billing,
+      });
+
+      return newPlan;
+    },
+    [logEvent, planOptions],
+  );
+
+  const getWeeklyUsageForStudent = useCallback(
+    (studentId: string, referenceDate = new Date()) => {
+      const activePlan = getActivePlanForStudent(studentId);
+      const weekStart = startOfWeekIso(referenceDate);
+      const reinstated = creditReinstatements
+        .filter((item) => item.studentId === studentId && item.weekStart === weekStart)
+        .reduce((sum, item) => sum + item.amount, 0);
+      const limit = (activePlan?.planOptionId
+        ? planOptions.find((item) => item.id === activePlan.planOptionId)?.weeklyClasses ?? 0
+        : 0) + reinstated;
+      const used = sessionBookings.filter(
+        (booking) => booking.studentId === studentId && booking.weekStart === weekStart && booking.status === 'booked',
+      ).length;
+
+      return { used, limit, remaining: Math.max(limit - used, 0), weekStart };
+    },
+    [creditReinstatements, getActivePlanForStudent, planOptions, sessionBookings],
+  );
+
+  const isSessionBooked = useCallback(
+    (sessionId: string, studentId: string) =>
+      sessionBookings.some(
+        (booking) => booking.sessionId === sessionId && booking.studentId === studentId && booking.status === 'booked',
+      ),
+    [sessionBookings],
+  );
+
+  const bookSessionForStudent = useCallback(
+    (sessionId: string, studentId: string) => {
+      const targetSession = sessions.find((item) => item.id === sessionId);
+      const activePlan = getActivePlanForStudent(studentId);
+      if (!targetSession || !activePlan) {
+        throw new Error('Sessão ou plano não localizado para realizar a reserva.');
+      }
+
+      const usage = getWeeklyUsageForStudent(studentId, new Date(targetSession.startTime));
+      if (isSessionBooked(sessionId, studentId)) {
+        throw new Error('Você já tem essa sessão reservada.');
+      }
+
+      if (usage.used >= usage.limit) {
+        throw new Error('Limite semanal de aulas atingido.');
+      }
+
+      const newBooking: SessionBooking = {
+        id: generateId('booking'),
+        studentId,
+        sessionId,
+        weekStart: usage.weekStart,
+        createdAt: new Date().toISOString(),
+        status: 'booked',
+      };
+
+      setSessionBookings((prev) => [...prev, newBooking]);
+      logEvent('enrollment_created', 'Reserva realizada com base no plano semanal', {
+        studentId,
+        sessionId,
+        weekStart: usage.weekStart,
+      });
+
+      return newBooking;
+    },
+    [getActivePlanForStudent, getWeeklyUsageForStudent, isSessionBooked, logEvent, sessions],
+  );
+
+  const reinstateClassForWeek = useCallback(
+    (studentId: string, weekStart: string, amount = 1, notes?: string) => {
+      const reinstatement: CreditReinstatement = {
+        id: generateId('reinstatement'),
+        studentId,
+        weekStart,
+        amount,
+        notes,
+        createdAt: new Date().toISOString(),
+      };
+
+      setCreditReinstatements((prev) => [...prev, reinstatement]);
+      logEvent('attendance_marked', 'Crédito semanal reinserido pelo instrutor', {
+        studentId,
+        weekStart,
+        amount,
+      });
+
+      return reinstatement;
+    },
+    [logEvent],
   );
 
   const getEnrollmentForStudent = useCallback(
@@ -1206,6 +1386,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       paymentSessions,
       receipts,
       settlements,
+      planOptions,
+      studentPlans,
+      sessionBookings,
+      creditReinstatements,
       evaluations,
       goals,
       events,
@@ -1223,6 +1407,12 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       deleteSession,
       ensureStudentProfile,
       getStudentProfileForEmail,
+      getActivePlanForStudent,
+      selectPlanForStudent,
+      getWeeklyUsageForStudent,
+      isSessionBooked,
+      bookSessionForStudent,
+      reinstateClassForWeek,
       getEnrollmentForStudent,
       enrollStudentInClass,
       getCapacityUsage,
@@ -1257,6 +1447,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       paymentSessions,
       receipts,
       settlements,
+      planOptions,
+      studentPlans,
+      sessionBookings,
+      creditReinstatements,
       evaluations,
       goals,
       events,
@@ -1268,6 +1462,12 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       payOutstandingPayment,
       ensureStudentProfile,
       getStudentProfileForEmail,
+      getActivePlanForStudent,
+      selectPlanForStudent,
+      getWeeklyUsageForStudent,
+      isSessionBooked,
+      bookSessionForStudent,
+      reinstateClassForWeek,
       enrollStudentInClass,
       getCapacityUsage,
       getEnrollmentForStudent,

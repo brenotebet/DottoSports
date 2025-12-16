@@ -74,7 +74,7 @@ const defaultDateStart = formatDateInput(new Date());
 const defaultDateEnd = formatDateInput(addDays(new Date(), 45));
 
 const defaultClassForm: ClassFormState = {
-  title: '',
+  title: 'Treino Funcional',
   description: '',
   level: 'all',
   category: 'crossfit',
@@ -335,10 +335,6 @@ export default function InstructorClassesScreen() {
   const validateClassForm = () => {
     const errors: Partial<Record<keyof ClassFormState, string>> = {};
 
-    if (!classForm.title.trim()) {
-      errors.title = 'Informe um título para a aula.';
-    }
-
     if (!classForm.capacity.trim()) {
       errors.capacity = 'Capacidade é obrigatória.';
     } else if (Number.isNaN(Number(classForm.capacity)) || Number(classForm.capacity) <= 0) {
@@ -383,7 +379,7 @@ export default function InstructorClassesScreen() {
     }
 
     const payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'> = {
-      title: classForm.title,
+      title: 'Treino Funcional',
       description: classForm.description || 'Aula personalizada para o box.',
       level: classForm.level,
       category: classForm.category,
@@ -476,12 +472,10 @@ export default function InstructorClassesScreen() {
             Use os horários disponíveis para evitar conflitos com outras turmas e defina um período de vigência.
           </ThemedText>
           <View style={styles.formRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="Título da aula"
-              value={classForm.title}
-              onChangeText={(text) => setClassForm((prev) => ({ ...prev, title: text }))}
-            />
+            <ThemedView style={[styles.input, styles.readonlyField]}>
+              <ThemedText type="defaultSemiBold">Treino Funcional</ThemedText>
+              <ThemedText style={styles.muted}>Título fixo para todas as aulas</ThemedText>
+            </ThemedView>
             <TextInput
               style={styles.input}
               placeholder="Capacidade"
@@ -490,9 +484,7 @@ export default function InstructorClassesScreen() {
               onChangeText={(text) => setClassForm((prev) => ({ ...prev, capacity: text }))}
             />
           </View>
-          {(classErrors.title || classErrors.capacity) && (
-            <ThemedText style={styles.errorText}>{classErrors.title ?? classErrors.capacity}</ThemedText>
-          )}
+          {classErrors.capacity && <ThemedText style={styles.errorText}>{classErrors.capacity}</ThemedText>}
           <TextInput
             style={styles.input}
             placeholder="Descrição"
@@ -724,6 +716,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: '#fff',
+  },
+  readonlyField: {
+    justifyContent: 'center',
+    gap: 2,
+    backgroundColor: '#f5f7fa',
   },
   errorText: {
     color: '#b42318',
