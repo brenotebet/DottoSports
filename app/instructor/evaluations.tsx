@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import type { TextInputProps } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -18,10 +27,14 @@ export default function EvaluationsScreen() {
   const { students, getStudentEvaluations, createEvaluation, updateEvaluation, deleteEvaluation } =
     useInstructorData();
 
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
   const [isDropdownOpen, setDropdownOpen] = useState(false);
-  const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [isMetersOpen, setMetersOpen] = useState(false);
+  const [isCentimetersOpen, setCentimetersOpen] = useState(false);
+  const [date, setDate] = useState<string>(today);
   const [questionnaire, setQuestionnaire] = useState<Evaluation['questionnaire']>({
     trainingFrequency: '',
     goalsFocus: '',
@@ -29,12 +42,35 @@ export default function EvaluationsScreen() {
     nutrition: '',
     sleepQuality: '',
     stressLevel: '',
+    weightKg: undefined,
+    heightMeters: 1,
+    heightCentimeters: 70,
   });
+  const [weightInput, setWeightInput] = useState('');
   const [notes, setNotes] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const uniqueStudents = useMemo(() => {
+    const seen = new Set<string>();
+    return students.filter((student) => {
+      if (seen.has(student.id)) return false;
+      seen.add(student.id);
+      return true;
+    });
+  }, [students]);
+
+  const meterOptions = useMemo(() => [0, 1, 2], []);
+  const centimeterOptions = useMemo(() => Array.from({ length: 100 }, (_, index) => index), []);
+
+  const formatHeight = (meters?: number, centimeters?: number) => {
+    if (meters === undefined && centimeters === undefined) return null;
+    const safeMeters = meters ?? 0;
+    const safeCentimeters = centimeters ?? 0;
+    return `${safeMeters}.${safeCentimeters.toString().padStart(2, '0')} m`;
+  };
+
   const resetForm = useCallback(() => {
-    setDate(new Date().toISOString().slice(0, 10));
+    setDate(today);
     setQuestionnaire({
       trainingFrequency: '',
       goalsFocus: '',
@@ -42,38 +78,65 @@ export default function EvaluationsScreen() {
       nutrition: '',
       sleepQuality: '',
       stressLevel: '',
+      weightKg: undefined,
+      heightMeters: 1,
+      heightCentimeters: 70,
     });
+    setWeightInput('');
     setNotes('');
     setEditingId(null);
-  }, []);
+  }, [today]);
 
   useEffect(() => {
-    if (students.length > 0 && !selectedStudentId) {
-      setSelectedStudentId(students[0].id);
+    if (uniqueStudents.length > 0 && !selectedStudentId) {
+      setSelectedStudentId(uniqueStudents[0].id);
     }
-  }, [selectedStudentId, students]);
+  }, [selectedStudentId, uniqueStudents]);
 
   useEffect(() => {
     resetForm();
   }, [resetForm, selectedStudentId]);
 
-  const evaluations = useMemo(
-    () => (selectedStudentId ? getStudentEvaluations(selectedStudentId) : []),
-    [getStudentEvaluations, selectedStudentId],
-  );
-
   const selectedStudent = useMemo(
-    () => students.find((student) => student.id === selectedStudentId) ?? null,
-    [selectedStudentId, students],
+    () => uniqueStudents.find((student) => student.id === selectedStudentId) ?? null,
+    [selectedStudentId, uniqueStudents],
   );
 
   const filteredStudents = useMemo(
     () =>
-      students.filter((student) =>
+      uniqueStudents.filter((student) =>
         student.fullName.toLowerCase().includes(searchTerm.trim().toLowerCase()),
       ),
-    [searchTerm, students],
+    [searchTerm, uniqueStudents],
   );
+
+  const allEvaluations = useMemo(() => {
+    return uniqueStudents
+      .flatMap((student) =>
+        getStudentEvaluations(student.id).map((evaluation) => ({ evaluation, student })),
+      )
+      .sort(
+        (a, b) => new Date(b.evaluation.date).getTime() - new Date(a.evaluation.date).getTime(),
+      );
+  }, [getStudentEvaluations, uniqueStudents]);
+
+  const filteredEvaluations = useMemo(() => {
+    const term = historySearchTerm.trim().toLowerCase();
+    if (!term) return allEvaluations;
+
+    return allEvaluations.filter(({ student, evaluation }) => {
+      const haystack = [
+        student.fullName,
+        student.phone,
+        evaluation.questionnaire.goalsFocus,
+        evaluation.notes ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(term);
+    });
+  }, [allEvaluations, historySearchTerm]);
 
   const handleSubmit = () => {
     if (!selectedStudentId) {
@@ -81,10 +144,36 @@ export default function EvaluationsScreen() {
       return;
     }
 
+    const evaluationDate = editingId ? date : today;
+
+    const normalizedMeters = Math.min(Math.max(questionnaire.heightMeters ?? 0, 0), 2);
+    const normalizedCentimeters = Math.min(Math.max(questionnaire.heightCentimeters ?? 0, 0), 99);
+    const totalHeight = normalizedMeters * 100 + normalizedCentimeters;
+
+    if (totalHeight <= 0) {
+      Alert.alert('Altura inválida', 'Informe altura em metros e centímetros para continuar.');
+      return;
+    }
+
+    if (questionnaire.weightKg !== undefined && questionnaire.weightKg <= 0) {
+      Alert.alert('Peso inválido', 'Use um valor de peso maior que zero ou deixe em branco.');
+      return;
+    }
+
+    const payloadQuestionnaire: Evaluation['questionnaire'] = {
+      ...questionnaire,
+      heightMeters: normalizedMeters,
+      heightCentimeters: normalizedCentimeters,
+      weightKg:
+        questionnaire.weightKg !== undefined
+          ? Math.round(Math.min(questionnaire.weightKg, 400) * 10) / 10
+          : undefined,
+    };
+
     const payload = {
       studentId: selectedStudentId,
-      date,
-      questionnaire,
+      date: evaluationDate,
+      questionnaire: payloadQuestionnaire,
       notes,
     } satisfies Omit<Evaluation, 'id'>;
 
@@ -104,6 +193,11 @@ export default function EvaluationsScreen() {
     setEditingId(evaluation.id);
     setDate(evaluation.date);
     setQuestionnaire(evaluation.questionnaire);
+    setWeightInput(
+      typeof evaluation.questionnaire.weightKg === 'number'
+        ? evaluation.questionnaire.weightKg.toString()
+        : '',
+    );
     setNotes(evaluation.notes ?? '');
   };
 
@@ -118,11 +212,26 @@ export default function EvaluationsScreen() {
     ]);
   };
 
+  const handleWeightInputChange = (text: string) => {
+    const sanitized = text.replace(/[^0-9.,]/g, '').replace(',', '.');
+    setWeightInput(sanitized);
+
+    const parsed = parseFloat(sanitized);
+    if (Number.isNaN(parsed)) {
+      setQuestionnaire((prev) => ({ ...prev, weightKg: undefined }));
+      return;
+    }
+
+    const bounded = Math.min(Math.max(parsed, 0), 400);
+    setQuestionnaire((prev) => ({ ...prev, weightKg: bounded }));
+  };
+
   const renderInput = (
     label: string,
     value: string,
     onChangeText: (text: string) => void,
     placeholder?: string,
+    options?: { keyboardType?: TextInputProps['keyboardType']; editable?: boolean; inputMode?: TextInputProps['inputMode'] },
   ) => (
     <View style={styles.field}>
       <ThemedText type="defaultSemiBold">{label}</ThemedText>
@@ -132,6 +241,9 @@ export default function EvaluationsScreen() {
         placeholder={placeholder}
         placeholderTextColor={colorScheme === 'dark' ? '#7a8695' : '#7d8a96'}
         style={[styles.input, { borderColor: Colors[colorScheme ?? 'light'].icon }]}
+        keyboardType={options?.keyboardType}
+        inputMode={options?.inputMode}
+        editable={options?.editable ?? true}
       />
     </View>
   );
@@ -159,11 +271,19 @@ export default function EvaluationsScreen() {
       style={[styles.safeArea, { paddingTop: insets.top }]}
       edges={['top', 'left', 'right', 'bottom']}>
       <TopBar title="Avaliações" />
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        <ThemedText type="title" style={styles.heading}>Registro de avaliações</ThemedText>
-        <ThemedText style={styles.leadText}>
-          Preencha o questionário físico e acompanhe as avaliações anteriores para manter o progresso claro.
-        </ThemedText>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior="padding"
+        keyboardVerticalOffset={insets.top + 12}>
+        <ScrollView
+          contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 32 }]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive">
+          <ThemedText type="title" style={styles.heading}>Registro de avaliações</ThemedText>
+          <ThemedText style={styles.leadText}>
+            Preencha o questionário físico e acompanhe as avaliações anteriores para manter o progresso claro.
+          </ThemedText>
 
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Selecione o aluno</ThemedText>
@@ -215,7 +335,7 @@ export default function EvaluationsScreen() {
             </View>
           )}
 
-          {!students.length && (
+          {!uniqueStudents.length && (
             <ThemedText style={styles.muted}>Nenhum aluno encontrado para atribuir.</ThemedText>
           )}
           {selectedStudent ? (
@@ -229,7 +349,77 @@ export default function EvaluationsScreen() {
           <ThemedText type="subtitle">
             {editingId ? 'Editar avaliação' : 'Nova avaliação'}
           </ThemedText>
-          {renderInput('Data', date, setDate, 'AAAA-MM-DD')}
+          {renderInput('Data', date, setDate, 'AAAA-MM-DD', { editable: false })}
+          {renderInput('Peso (kg)', weightInput, handleWeightInputChange, 'Ex.: 72.5', {
+            keyboardType: 'decimal-pad',
+            inputMode: 'decimal',
+          })}
+          <View style={styles.field}>
+            <ThemedText type="defaultSemiBold">Altura</ThemedText>
+            <ThemedText style={styles.mutedSmall}>Metros e centímetros</ThemedText>
+            <View style={styles.heightSelectors}>
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  style={[styles.dropdown, isMetersOpen && styles.dropdownOpen]}
+                  onPress={() => {
+                    setMetersOpen((prev) => !prev);
+                    setCentimetersOpen(false);
+                  }}>
+                  <ThemedText type="defaultSemiBold">
+                    {questionnaire.heightMeters ?? 0} m
+                  </ThemedText>
+                  <ThemedText type="defaultSemiBold">{isMetersOpen ? '▲' : '▼'}</ThemedText>
+                </Pressable>
+                {isMetersOpen && (
+                  <View style={styles.dropdownPanel}>
+                    <ScrollView style={styles.heightList} showsVerticalScrollIndicator={false}>
+                      {meterOptions.map((option) => (
+                        <Pressable
+                          key={option}
+                          style={styles.dropdownItem}
+                          onPress={() => {
+                            setQuestionnaire((prev) => ({ ...prev, heightMeters: option }));
+                            setMetersOpen(false);
+                          }}>
+                          <ThemedText type="defaultSemiBold">{option} m</ThemedText>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Pressable
+                  style={[styles.dropdown, isCentimetersOpen && styles.dropdownOpen]}
+                  onPress={() => {
+                    setCentimetersOpen((prev) => !prev);
+                    setMetersOpen(false);
+                  }}>
+                  <ThemedText type="defaultSemiBold">
+                    {(questionnaire.heightCentimeters ?? 0).toString().padStart(2, '0')} cm
+                  </ThemedText>
+                  <ThemedText type="defaultSemiBold">{isCentimetersOpen ? '▲' : '▼'}</ThemedText>
+                </Pressable>
+                {isCentimetersOpen && (
+                  <View style={styles.dropdownPanel}>
+                    <ScrollView style={styles.heightList} showsVerticalScrollIndicator={false}>
+                      {centimeterOptions.map((option) => (
+                        <Pressable
+                          key={option}
+                          style={styles.dropdownItem}
+                          onPress={() => {
+                            setQuestionnaire((prev) => ({ ...prev, heightCentimeters: option }));
+                            setCentimetersOpen(false);
+                          }}>
+                          <ThemedText type="defaultSemiBold">{option} cm</ThemedText>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
           {renderInput('Frequência de treino', questionnaire.trainingFrequency, (text) =>
             setQuestionnaire((prev) => ({ ...prev, trainingFrequency: text })),
             'Ex.: 4x por semana',
@@ -275,18 +465,45 @@ export default function EvaluationsScreen() {
         </ThemedView>
 
         <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Histórico</ThemedText>
-          {evaluations.length === 0 ? (
+          <View style={{ gap: 8 }}>
+            <ThemedText type="subtitle">Histórico</ThemedText>
+            <TextInput
+              placeholder="Buscar por cliente, foco ou observação"
+              placeholderTextColor={colorScheme === 'dark' ? '#7a8695' : '#7d8a96'}
+              value={historySearchTerm}
+              onChangeText={setHistorySearchTerm}
+              style={[styles.input, { borderColor: Colors[colorScheme ?? 'light'].icon }]}
+            />
+          </View>
+          {filteredEvaluations.length === 0 ? (
             <ThemedText style={styles.muted}>Nenhuma avaliação registrada até agora.</ThemedText>
           ) : (
             <View style={styles.list}>
-              {evaluations.map((evaluation) => (
+              {filteredEvaluations.map(({ evaluation, student }) => (
                 <View key={evaluation.id} style={styles.listItem}>
                   <View style={styles.listText}>
-                    <ThemedText type="defaultSemiBold">{evaluation.date}</ThemedText>
+                    <ThemedText type="defaultSemiBold">{student.fullName}</ThemedText>
+                    <ThemedText style={styles.mutedSmall}>{evaluation.date}</ThemedText>
                     <ThemedText style={styles.muted}>
                       {evaluation.questionnaire.goalsFocus || 'Sem foco informado'}
                     </ThemedText>
+                    {evaluation.questionnaire.weightKg ? (
+                      <ThemedText style={styles.mutedSmall}>
+                        Peso: {evaluation.questionnaire.weightKg} kg
+                      </ThemedText>
+                    ) : null}
+                    {formatHeight(
+                      evaluation.questionnaire.heightMeters,
+                      evaluation.questionnaire.heightCentimeters,
+                    ) ? (
+                      <ThemedText style={styles.mutedSmall}>
+                        Altura:{' '}
+                        {formatHeight(
+                          evaluation.questionnaire.heightMeters,
+                          evaluation.questionnaire.heightCentimeters,
+                        )}
+                      </ThemedText>
+                    ) : null}
                     {evaluation.notes ? (
                       <ThemedText style={styles.mutedSmall}>{evaluation.notes}</ThemedText>
                     ) : null}
@@ -306,7 +523,8 @@ export default function EvaluationsScreen() {
             </View>
           )}
         </ThemedView>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -317,6 +535,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   container: {
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingBottom: 24,
     gap: 16,
@@ -417,6 +636,19 @@ const styles = StyleSheet.create({
   },
   dropdownList: {
     maxHeight: 200,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#c2d9ef',
+    backgroundColor: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  heightSelectors: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  heightList: {
+    maxHeight: 180,
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#c2d9ef',

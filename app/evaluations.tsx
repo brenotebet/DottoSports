@@ -11,6 +11,13 @@ import { useInstructorData } from '@/providers/instructor-data-provider';
 
 export const options = { headerShown: false };
 
+const formatHeight = (meters?: number, centimeters?: number) => {
+  if (meters === undefined && centimeters === undefined) return null;
+  const safeMeters = meters ?? 0;
+  const safeCentimeters = centimeters ?? 0;
+  return `${safeMeters}.${safeCentimeters.toString().padStart(2, '0')} m`;
+};
+
 export default function StudentEvaluationsScreen() {
   const { user, hasRole } = useAuth();
   const { getStudentProfileForEmail, getStudentEvaluations } = useInstructorData();
@@ -84,6 +91,20 @@ export default function StudentEvaluationsScreen() {
               <ThemedText type="defaultSemiBold">Frequência</ThemedText>
               <ThemedText>{latest.questionnaire.trainingFrequency || '—'}</ThemedText>
             </View>
+            {latest.questionnaire.weightKg ? (
+              <View style={styles.metaRow}>
+                <ThemedText type="defaultSemiBold">Peso</ThemedText>
+                <ThemedText>{latest.questionnaire.weightKg} kg</ThemedText>
+              </View>
+            ) : null}
+            {formatHeight(latest.questionnaire.heightMeters, latest.questionnaire.heightCentimeters) ? (
+              <View style={styles.metaRow}>
+                <ThemedText type="defaultSemiBold">Altura</ThemedText>
+                <ThemedText>
+                  {formatHeight(latest.questionnaire.heightMeters, latest.questionnaire.heightCentimeters)}
+                </ThemedText>
+              </View>
+            ) : null}
             {latest.notes ? (
               <View style={styles.noteBox}>
                 <ThemedText type="defaultSemiBold">Observações do instrutor</ThemedText>
@@ -127,6 +148,23 @@ export default function StudentEvaluationsScreen() {
                     {evaluation.questionnaire.stressLevel ? (
                       <ThemedText style={styles.mutedSmall}>
                         Estresse: {evaluation.questionnaire.stressLevel}
+                      </ThemedText>
+                    ) : null}
+                    {evaluation.questionnaire.weightKg ? (
+                      <ThemedText style={styles.mutedSmall}>
+                        Peso: {evaluation.questionnaire.weightKg} kg
+                      </ThemedText>
+                    ) : null}
+                    {formatHeight(
+                      evaluation.questionnaire.heightMeters,
+                      evaluation.questionnaire.heightCentimeters,
+                    ) ? (
+                      <ThemedText style={styles.mutedSmall}>
+                        Altura:{' '}
+                        {formatHeight(
+                          evaluation.questionnaire.heightMeters,
+                          evaluation.questionnaire.heightCentimeters,
+                        )}
                       </ThemedText>
                     ) : null}
                     {evaluation.notes ? (
