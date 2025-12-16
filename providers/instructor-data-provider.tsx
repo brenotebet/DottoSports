@@ -568,13 +568,14 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       if (!targetedPaymentId) return;
 
+      const paymentId = targetedPaymentId!;
       const enrollmentId = targetedEnrollmentId ?? `${studentId}-unassigned-plan`;
 
       setInvoices((prev) => {
-        const existing = prev.find((invoice) => invoice.paymentId === targetedPaymentId);
+        const existing = prev.find((invoice) => invoice.paymentId === paymentId);
         if (existing) {
           return prev.map((invoice) =>
-            invoice.paymentId === targetedPaymentId
+            invoice.paymentId === paymentId
               ? {
                   ...invoice,
                   issueDate: issueDateFormatted,
@@ -588,7 +589,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
         const invoice: Invoice = {
           id: generateId('invoice'),
-          paymentId: targetedPaymentId,
+          paymentId,
           enrollmentId,
           issueDate: issueDateFormatted,
           reference: `${issueDate.getMonth() + 1}/${issueDate.getFullYear()} - Plano semanal`,
@@ -602,7 +603,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       setPaymentIntents((prev) =>
         prev.map((intent) =>
-          intent.paymentId === targetedPaymentId
+          intent.paymentId === paymentId
             ? { ...intent, amount, enrollmentId }
             : intent,
         ),
@@ -610,7 +611,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       logEvent('payment_posted', 'Cobrança atualizada para refletir novo plano.', {
         studentId,
-        paymentId: targetedPaymentId,
+        paymentId,
         amount,
         billing,
       });
