@@ -25,6 +25,7 @@ export default function DashboardScreen() {
     getStudentAccountSnapshot,
     getActivePlanForStudent,
     getWeeklyUsageForStudent,
+    sessionBookings,
     planOptions,
     goals,
   } = useInstructorData();
@@ -48,7 +49,32 @@ export default function DashboardScreen() {
     [studentAccount],
   );
 
+  const bookingsForStudent = useMemo(
+    () =>
+      studentId
+        ? sessionBookings.filter(
+            (booking) => booking.studentId === studentId && booking.status === 'booked',
+          )
+        : [],
+    [sessionBookings, studentId],
+  );
+
+  const upcomingBookedSession = useMemo(() => {
+    const now = Date.now();
+    const bookedSessions = bookingsForStudent
+      .map((booking) => sessions.find((session) => session.id === booking.sessionId))
+      .filter((session): session is (typeof sessions)[number] => Boolean(session));
+
+    const future = bookedSessions
+      .filter((session) => new Date(session.startTime).getTime() >= now)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+    const ordered = future.length > 0 ? future : bookedSessions;
+    return ordered[0] ?? null;
+  }, [bookingsForStudent, sessions]);
+
   const upcomingSession = useMemo(() => {
+    if (upcomingBookedSession) return upcomingBookedSession;
     if (studentEnrollments.length === 0) return null;
 
     const enrolledClassIds = new Set(studentEnrollments.map((item) => item.classId));
@@ -59,13 +85,12 @@ export default function DashboardScreen() {
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
     if (futureSessions.length > 0) return futureSessions[0];
-
     const allSessions = sessions
       .filter((session) => enrolledClassIds.has(session.classId))
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
     return allSessions[0] ?? null;
-  }, [sessions, studentEnrollments]);
+  }, [sessions, studentEnrollments, upcomingBookedSession]);
 
   const sessionClass = useMemo(
     () => classes.find((item) => item.id === upcomingSession?.classId),
@@ -224,7 +249,7 @@ export default function DashboardScreen() {
                 {nextPayment ? `Próximo vencimento em ${nextPayment.payment.dueDate}` : 'Cobranças em dia.'}
               </ThemedText>
               <View style={styles.planActions}>
-                <Link href="/payments" asChild>
+                <Link href="/account" asChild>
                   <Pressable style={styles.managePlanButton}>
                     <ThemedText type="defaultSemiBold" style={styles.managePlanText}>Gerenciar plano</ThemedText>
                   </Pressable>
@@ -237,7 +262,7 @@ export default function DashboardScreen() {
                 Você ainda não escolheu um plano. Selecione sua quantidade de aulas semanais para habilitar as
                 reservas.
               </ThemedText>
-              <Link href="/payments" asChild>
+              <Link href="/account" asChild>
                 <Pressable style={styles.managePlanButton}>
                   <ThemedText type="defaultSemiBold" style={styles.managePlanText}>Escolher plano</ThemedText>
                 </Pressable>

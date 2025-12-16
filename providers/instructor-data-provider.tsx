@@ -502,6 +502,107 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [studentPlans],
   );
 
+  const upsertPlanPayment = useCallback(
+    (studentId: string, option: PlanOption, billing: StudentPlan['billing']) => {
+      const amount = billing === 'recurring' ? option.priceMonthly : option.priceUpfront;
+      const issueDate = new Date();
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 7);
+
+      const issueDateFormatted = issueDate.toISOString().slice(0, 10);
+      const dueDateFormatted = dueDate.toISOString().slice(0, 10);
+      const description = `${option.weeklyClasses}x semana · ${option.durationMonths}m (${billing === 'recurring' ? 'mensal' : 'à vista'})`;
+
+      let targetedPaymentId: string | null = null;
+
+      setPayments((prev) => {
+        let updated = false;
+        const next = prev.map((payment) => {
+          if (payment.studentId === studentId && payment.status !== 'paid' && !updated) {
+            targetedPaymentId = payment.id;
+            updated = true;
+            return {
+              ...payment,
+              amount,
+              dueDate: dueDateFormatted,
+              description,
+              status: 'pending',
+            } satisfies Payment;
+          }
+
+          return payment;
+        });
+
+        if (!updated) {
+          const payment: Payment = {
+            id: generateId('payment'),
+            studentId,
+            amount,
+            currency: 'BRL',
+            method: 'pix',
+            status: 'pending',
+            dueDate: dueDateFormatted,
+            description,
+          };
+
+          targetedPaymentId = payment.id;
+          next.push(payment);
+        }
+
+        return next.sort(
+          (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
+        );
+      });
+
+      if (!targetedPaymentId) return;
+
+      setInvoices((prev) => {
+        const existing = prev.find((invoice) => invoice.paymentId === targetedPaymentId);
+        if (existing) {
+          return prev.map((invoice) =>
+            invoice.paymentId === targetedPaymentId
+              ? {
+                  ...invoice,
+                  issueDate: issueDateFormatted,
+                  total: amount,
+                  status: 'open',
+                  reference: invoice.reference ?? `${issueDate.getMonth() + 1}/${issueDate.getFullYear()}`,
+                }
+              : invoice,
+          );
+        }
+
+        const invoice: Invoice = {
+          id: generateId('invoice'),
+          paymentId: targetedPaymentId,
+          issueDate: issueDateFormatted,
+          reference: `${issueDate.getMonth() + 1}/${issueDate.getFullYear()} - Plano semanal`,
+          total: amount,
+          currency: 'BRL',
+          status: 'open',
+        };
+
+        return [...prev, invoice];
+      });
+
+      setPaymentIntents((prev) =>
+        prev.map((intent) =>
+          intent.paymentId === targetedPaymentId
+            ? { ...intent, amount }
+            : intent,
+        ),
+      );
+
+      logEvent('payment_posted', 'Cobrança atualizada para refletir novo plano.', {
+        studentId,
+        paymentId: targetedPaymentId,
+        amount,
+        billing,
+      });
+    },
+    [logEvent],
+  );
+
   const selectPlanForStudent = useCallback(
     (studentId: string, planOptionId: string, billing: StudentPlan['billing']) => {
       const option = planOptions.find((item) => item.id === planOptionId);
@@ -531,9 +632,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         billing,
       });
 
+      upsertPlanPayment(studentId, option, billing);
+
       return newPlan;
     },
-    [logEvent, planOptions],
+    [logEvent, planOptions, upsertPlanPayment],
   );
 
   const getWeeklyUsageForStudent = useCallback(
