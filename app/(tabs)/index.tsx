@@ -69,8 +69,7 @@ export default function DashboardScreen() {
       .filter((session) => new Date(session.startTime).getTime() >= now)
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-    const ordered = future.length > 0 ? future : bookedSessions;
-    return ordered[0] ?? null;
+    return future[0] ?? null;
   }, [bookingsForStudent, sessions]);
 
   const upcomingSession = useMemo(() => {
@@ -84,12 +83,7 @@ export default function DashboardScreen() {
       .filter((session) => enrolledClassIds.has(session.classId) && new Date(session.startTime).getTime() >= now)
       .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-    if (futureSessions.length > 0) return futureSessions[0];
-    const allSessions = sessions
-      .filter((session) => enrolledClassIds.has(session.classId))
-      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-
-    return allSessions[0] ?? null;
+    return futureSessions[0] ?? null;
   }, [sessions, studentEnrollments, upcomingBookedSession]);
 
   const sessionClass = useMemo(
