@@ -1,6 +1,17 @@
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Keyboard, Pressable, StyleSheet, TextInput, TouchableWithoutFeedback, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -39,85 +50,96 @@ export default function LoginScreen() {
   const textColor = themeColors.text;
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <ThemedView style={[styles.container, { backgroundColor: themeColors.background }]}>
-        <View style={styles.formContainer}>
-          <ThemedText type="title" style={styles.title}>
-            Entrar
-          </ThemedText>
-          <ThemedText style={[styles.subtitle, { color: textColor }]}>Acesse com seu e-mail para continuar.</ThemedText>
-
-          <TextInput
-            autoCapitalize="none"
-            autoComplete="email"
-            keyboardType="email-address"
-            placeholder="email@exemplo.com"
-            placeholderTextColor={placeholderColor}
-            style={[
-              styles.input,
-              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
-            ]}
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <TextInput
-            autoComplete="password"
-            placeholder="Senha"
-            placeholderTextColor={placeholderColor}
-            secureTextEntry
-            style={[
-              styles.input,
-              { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
-            ]}
-            value={password}
-            onChangeText={setPassword}
-          />
-
-          {error ? (
-            <ThemedText style={styles.errorText}>{error}</ThemedText>
-          ) : null}
-
-          <Pressable
-            disabled={submitting}
-            onPress={onSubmit}
-            style={({ pressed }) => [
-              styles.button,
-              {
-                backgroundColor: submitting ? '#9fd4f8' : themeColors.tint,
-                opacity: pressed ? 0.9 : 1,
-              },
-            ]}>
-            {submitting ? (
-              <ActivityIndicator color="#0b3b5a" />
-            ) : (
-              <ThemedText type="defaultSemiBold" style={styles.buttonText}>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ScrollView contentContainerStyle={styles.scrollContent} bounces={false}>
+          <ThemedView style={[styles.innerContainer, { backgroundColor: themeColors.background }]}>
+            <View style={styles.formContainer}>
+              <ThemedText type="title" style={styles.title}>
                 Entrar
               </ThemedText>
-            )}
-          </Pressable>
+              <ThemedText style={[styles.subtitle, { color: textColor }]}>Acesse com seu e-mail para continuar.</ThemedText>
 
-          <View style={styles.footer}>
-            <ThemedText style={[styles.footerText, { color: textColor }]}>Não tem conta?</ThemedText>
-            <Link href="/(auth)/signup" asChild>
-              <Pressable style={styles.footerButton}>
-                <ThemedText type="defaultSemiBold" style={styles.footerButtonText}>
-                  Cadastre-se
-                </ThemedText>
+              <TextInput
+                autoCapitalize="none"
+                autoComplete="email"
+                keyboardType="email-address"
+                placeholder="email@exemplo.com"
+                placeholderTextColor={placeholderColor}
+                style={[
+                  styles.input,
+                  { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+                ]}
+                value={email}
+                onChangeText={setEmail}
+              />
+
+              <TextInput
+                autoComplete="password"
+                placeholder="Senha"
+                placeholderTextColor={placeholderColor}
+                secureTextEntry
+                style={[
+                  styles.input,
+                  { borderColor: themeColors.icon, backgroundColor: inputBackground, color: textColor },
+                ]}
+                value={password}
+                onChangeText={setPassword}
+              />
+
+              {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
+
+              <Pressable
+                disabled={submitting}
+                onPress={onSubmit}
+                style={({ pressed }) => [
+                  styles.button,
+                  {
+                    backgroundColor: submitting ? '#9fd4f8' : themeColors.tint,
+                    opacity: pressed ? 0.9 : 1,
+                  },
+                ]}>
+                {submitting ? (
+                  <ActivityIndicator color="#0b3b5a" />
+                ) : (
+                  <ThemedText type="defaultSemiBold" style={styles.buttonText}>
+                    Entrar
+                  </ThemedText>
+                )}
               </Pressable>
-            </Link>
-          </View>
-        </View>
-      </ThemedView>
-    </TouchableWithoutFeedback>
+
+              <View style={styles.footer}>
+                <ThemedText style={[styles.footerText, { color: textColor }]}>Não tem conta?</ThemedText>
+                <Link href="/(auth)/signup" asChild>
+                  <Pressable style={styles.footerButton}>
+                    <ThemedText type="defaultSemiBold" style={styles.footerButtonText}>
+                      Cadastre-se
+                    </ThemedText>
+                  </Pressable>
+                </Link>
+              </View>
+            </View>
+          </ThemedView>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  innerContainer: {
+    flex: 1,
     justifyContent: 'center',
     padding: 24,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   formContainer: {
     gap: 16,
