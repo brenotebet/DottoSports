@@ -80,6 +80,14 @@ export default function PaymentsScreen() {
   const [selectedWeekly, setSelectedWeekly] = useState<number>(availableWeeklyOptions[0] ?? 2);
 
   useEffect(() => {
+    if (activePlanOption) {
+      setSelectedDuration(activePlanOption.durationMonths);
+      setSelectedWeekly(activePlanOption.weeklyClasses);
+      setBillingCycle(activePlan?.billing ?? 'recurring');
+    }
+  }, [activePlan?.billing, activePlanOption]);
+
+  useEffect(() => {
     if (!availableWeeklyOptions.includes(selectedWeekly)) {
       setSelectedWeekly(availableWeeklyOptions[0] ?? selectedWeekly);
     }
@@ -126,7 +134,7 @@ export default function PaymentsScreen() {
     try {
       selectPlanForStudent(studentId, planOptionId, billingCycle);
       Alert.alert(
-        'Plano salvo',
+        activePlan ? 'Plano atualizado' : 'Plano salvo',
         billingCycle === 'recurring'
           ? 'Cobraremos mensalmente este plano com recorrência automática.'
           : 'Plano pago à vista selecionado. Ajuste de cobrança registrado.',
@@ -143,6 +151,13 @@ export default function PaymentsScreen() {
       ? selectedOption.priceMonthly
       : selectedOption.priceUpfront
     : 0;
+
+  const selectionMatchesActive = Boolean(
+    activePlanOption &&
+      activePlan?.billing === billingCycle &&
+      activePlanOption.durationMonths === selectedDuration &&
+      activePlanOption.weeklyClasses === selectedWeekly,
+  );
 
   return (
     <SafeAreaView
@@ -212,7 +227,7 @@ export default function PaymentsScreen() {
           <View style={styles.dropdownGroup}>
             <View style={styles.dropdownField}>
               <ThemedText type="defaultSemiBold">Duração</ThemedText>
-              <ThemedText style={styles.muted}>Escolha quantos meses deseja contratar.</ThemedText>
+              <ThemedText style={styles.muted}>Edite seu plano sem adicionar novas assinaturas.</ThemedText>
               <View style={styles.dropdownOptions}>
                 {durationOptions.map((option) => (
                   <Pressable
@@ -262,11 +277,11 @@ export default function PaymentsScreen() {
           </ThemedView>
 
           <Pressable
-            style={[styles.payButton, !selectedOption && styles.payButtonDisabled]}
-            disabled={!selectedOption}
+            style={[styles.payButton, (!selectedOption || selectionMatchesActive) && styles.payButtonDisabled]}
+            disabled={!selectedOption || selectionMatchesActive}
             onPress={() => selectedOption && handleSelectPlan(selectedOption.id)}>
             <ThemedText type="defaultSemiBold" style={styles.payButtonText}>
-              {selectedOption ? 'Confirmar plano' : 'Selecione uma combinação'}
+              {selectedOption ? (activePlan ? 'Atualizar plano' : 'Confirmar plano') : 'Selecione uma combinação'}
             </ThemedText>
           </Pressable>
         </ThemedView>

@@ -546,13 +546,23 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const limit = (activePlan?.planOptionId
         ? planOptions.find((item) => item.id === activePlan.planOptionId)?.weeklyClasses ?? 0
         : 0) + reinstated;
-      const used = sessionBookings.filter(
+
+      const bookingsThisWeek = sessionBookings.filter(
         (booking) => booking.studentId === studentId && booking.weekStart === weekStart && booking.status === 'booked',
       ).length;
 
+      const enrollmentsThisWeek = enrollments.filter(
+        (enrollment) =>
+          enrollment.studentId === studentId &&
+          enrollment.status !== 'cancelled' &&
+          startOfWeekIso(new Date(enrollment.createdAt)) === weekStart,
+      ).length;
+
+      const used = Math.max(bookingsThisWeek, enrollmentsThisWeek);
+
       return { used, limit, remaining: Math.max(limit - used, 0), weekStart };
     },
-    [creditReinstatements, getActivePlanForStudent, planOptions, sessionBookings],
+    [creditReinstatements, enrollments, getActivePlanForStudent, planOptions, sessionBookings],
   );
 
   const isSessionBooked = useCallback(
@@ -676,6 +686,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         const reactivated: Enrollment = {
           ...existing,
           status: isWaitlist ? 'waitlist' : 'active',
+          createdAt: now,
           updatedAt: now,
         };
 
