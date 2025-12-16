@@ -62,6 +62,43 @@ export type TrainingClass = {
   updatedAt: string;
 };
 
+export type PlanOption = {
+  id: string;
+  weeklyClasses: number;
+  durationMonths: number;
+  priceMonthly: number;
+  priceUpfront: number;
+  currency: Payment['currency'];
+};
+
+export type StudentPlan = {
+  id: string;
+  studentId: string;
+  planOptionId: string;
+  billing: 'upfront' | 'recurring';
+  startDate: string;
+  endDate: string;
+  status: 'active' | 'expired' | 'paused';
+};
+
+export type SessionBooking = {
+  id: string;
+  studentId: string;
+  sessionId: string;
+  weekStart: string;
+  createdAt: string;
+  status: 'booked' | 'cancelled';
+};
+
+export type CreditReinstatement = {
+  id: string;
+  studentId: string;
+  weekStart: string;
+  amount: number;
+  createdAt: string;
+  notes?: string;
+};
+
 export type ClassSession = {
   id: string;
   classId: string;
@@ -206,4 +243,8 @@ export type DatabaseSchema = {
   settlements: Settlement[];
   evaluations: Evaluation[];
   goals: Goal[];
+  planOptions: PlanOption[];
+  studentPlans: StudentPlan[];
+  sessionBookings: SessionBooking[];
+  creditReinstatements: CreditReinstatement[];
 };

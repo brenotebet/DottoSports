@@ -23,12 +23,21 @@ export default function ClassDetailsScreen() {
     getCapacityUsage,
     getEnrollmentForStudent,
     cancelEnrollment,
+    sessions,
+    getWeeklyUsageForStudent,
+    bookSessionForStudent,
+    isSessionBooked,
   } = useInstructorData();
 
   const [statusMessage, setStatusMessage] = useState('');
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
   const [totalPrice] = useState(120);
   const insets = useSafeAreaInsets();
+
+  const currentWeekUsage = useMemo(
+    () => (currentStudentId ? getWeeklyUsageForStudent(currentStudentId) : null),
+    [currentStudentId, getWeeklyUsageForStudent],
+  );
 
   const trainingClass = useMemo(() => classes.find((item) => item.id === classId), [classes, classId]);
   const capacity = useMemo(
@@ -44,6 +53,14 @@ export default function ClassDetailsScreen() {
   }, [ensureStudentProfile, user]);
 
   const rosterEntries = useMemo(() => rosterByClass[classId ?? ''] ?? [], [classId, rosterByClass]);
+
+  const upcomingSessions = useMemo(
+    () =>
+      sessions
+        .filter((session) => session.classId === classId)
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
+    [classId, sessions],
+  );
 
   const existingEnrollment = useMemo(() => {
     if (!currentStudentId || !classId) return undefined;
@@ -91,6 +108,21 @@ export default function ClassDetailsScreen() {
     });
   };
 
+  const handleBookSession = (sessionId: string, referenceDate: Date) => {
+    if (!currentStudentId) return;
+
+    try {
+      bookSessionForStudent(sessionId, currentStudentId);
+      const usage = getWeeklyUsageForStudent(currentStudentId, referenceDate);
+      const message = `Reserva confirmada. Restam ${usage.remaining} aulas esta semana.`;
+      setStatusMessage(message);
+      Alert.alert('Reserva confirmada', message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível reservar esta sessão.';
+      Alert.alert('Limite atingido', message);
+    }
+  };
+
   const handleUnregister = () => {
     if (!existingEnrollment) return;
     confirmAction('Cancelar inscrição', 'Deseja sair desta turma? Cancelaremos cobranças futuras.', () => {
@@ -136,6 +168,17 @@ export default function ClassDetailsScreen() {
         </ThemedView>
 
         <ThemedView style={styles.card}>
+          <ThemedText type="subtitle">Limites do plano</ThemedText>
+          <ThemedText style={styles.muted}>
+            Use seu saldo semanal para reservar horários. Aulas avulsas custam R$ 79,00 (&quot;Dia adicional&quot; do cardápio).
+          </ThemedText>
+          <View style={styles.usageRow}>
+            <ThemedText type="title">{currentWeekUsage ? `${currentWeekUsage.used}/${currentWeekUsage.limit}` : '--/--'}</ThemedText>
+            <ThemedText style={styles.muted}>reservas nesta semana</ThemedText>
+          </View>
+        </ThemedView>
+
+        <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Inscrição</ThemedText>
           <ThemedText style={styles.muted}>
             Para confirmar sua vaga precisamos vincular sua conta e respeitar a capacidade da turma.
@@ -164,6 +207,53 @@ export default function ClassDetailsScreen() {
               Status atual: {existingEnrollment.status === 'waitlist' ? 'Lista de espera' : 'Confirmado'}
             </ThemedText>
           )}
+        </ThemedView>
+
+        <ThemedView style={styles.card}>
+          <ThemedText type="subtitle">Próximos horários</ThemedText>
+          <ThemedText style={styles.muted}>
+            Escolha horários nesta semana respeitando o seu limite de aulas contratadas.
+          </ThemedText>
+          <View style={{ gap: 10 }}>
+            {upcomingSessions.map((session) => {
+              const sessionDate = new Date(session.startTime);
+              const usage = currentStudentId ? getWeeklyUsageForStudent(currentStudentId, sessionDate) : null;
+              const booked = currentStudentId ? isSessionBooked(session.id, currentStudentId) : false;
+              const remaining = usage?.remaining ?? 0;
+
+              return (
+                <ThemedView key={session.id} style={styles.sessionCard}>
+                  <View style={styles.sessionRowCompact}>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText type="defaultSemiBold">
+                        {sessionDate.toLocaleString('pt-BR', {
+                          weekday: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </ThemedText>
+                      <ThemedText style={styles.muted}>{session.location}</ThemedText>
+                      <ThemedText style={styles.muted}>
+                        Semana: {usage?.weekStart?.slice(0, 10) ?? '--'} · Uso: {usage ? `${usage.used}/${usage.limit}` : '--'}
+                      </ThemedText>
+                    </View>
+                    <Pressable
+                      style={[styles.primaryButton, (booked || remaining <= 0) && styles.primaryButtonDisabled]}
+                      disabled={booked || remaining <= 0 || !currentStudentId}
+                      onPress={() => handleBookSession(session.id, sessionDate)}>
+                      <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
+                        {booked ? 'Já reservado' : remaining <= 0 ? 'Limite da semana' : 'Reservar'}
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                </ThemedView>
+              );
+            })}
+
+            {upcomingSessions.length === 0 && (
+              <ThemedText style={styles.muted}>Nenhuma sessão agendada para esta turma.</ThemedText>
+            )}
+          </View>
         </ThemedView>
 
         <ThemedView style={styles.card}>
@@ -253,6 +343,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#dce9f5',
   },
+  usageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   priceRow: {
     marginTop: 4,
   },
@@ -264,6 +359,9 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#022a4c',
+  },
+  primaryButtonDisabled: {
+    backgroundColor: '#c9e5f7',
   },
   secondaryButton: {
     marginTop: 8,
@@ -280,6 +378,18 @@ const styles = StyleSheet.create({
   statusText: {
     marginTop: 6,
     color: '#0b3b5a',
+  },
+  sessionCard: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#dbe8f4',
+  },
+  sessionRowCompact: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
   },
   rosterList: {
     gap: 10,

@@ -15,6 +15,15 @@ const formatSession = (dateString: string, location?: string) =>
     minute: '2-digit',
   })}${location ? ` · ${location}` : ''}`;
 
+const startOfWeek = (date: Date) => {
+  const copy = new Date(date);
+  const day = copy.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  copy.setDate(copy.getDate() + diff);
+  copy.setHours(0, 0, 0, 0);
+  return copy.toISOString();
+};
+
 export default function ClassRosterDetailScreen() {
   const { classId } = useLocalSearchParams<{ classId?: string }>();
   const {
@@ -23,6 +32,7 @@ export default function ClassRosterDetailScreen() {
     rosterByClass,
     toggleAttendance,
     updateEnrollmentStatus,
+    reinstateClassForWeek,
   } = useInstructorData();
   const insets = useSafeAreaInsets();
 
@@ -65,6 +75,25 @@ export default function ClassRosterDetailScreen() {
           onPress: () => {
             updateEnrollmentStatus(enrollmentId, 'cancelled');
             Alert.alert('Aluno removido', 'A inscrição foi cancelada com sucesso.');
+          },
+        },
+      ],
+    );
+  };
+
+  const handleReinstateCredit = (studentId: string) => {
+    if (!nextSession) return;
+    const weekStart = startOfWeek(new Date(nextSession.startTime));
+    Alert.alert(
+      'Repor aula da semana',
+      'Deseja devolver 1 aula ao saldo semanal deste aluno?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Repor crédito',
+          onPress: () => {
+            reinstateClassForWeek(studentId, weekStart, 1, 'Reposição manual pelo instrutor');
+            Alert.alert('Crédito reposto', 'Adicionamos +1 aula disponível nesta semana.');
           },
         },
       ],
@@ -143,6 +172,11 @@ export default function ClassRosterDetailScreen() {
                             nextSession && handleCheckIn(nextSession.id, entry.enrollment.id, 'absent')
                           }>
                           <ThemedText style={[styles.actionText, styles.absentText]}>Falta</ThemedText>
+                        </Pressable>
+                        <Pressable
+                          style={[styles.checkButton, styles.reinstateButton]}
+                          onPress={() => handleReinstateCredit(entry.student.id)}>
+                          <ThemedText style={styles.actionText}>Repor semana</ThemedText>
                         </Pressable>
                         <Pressable
                           style={[styles.checkButton, styles.removeButton]}
@@ -238,6 +272,10 @@ const styles = StyleSheet.create({
   absentButton: {
     backgroundColor: '#fff1f1',
     borderColor: '#ffb4b4',
+  },
+  reinstateButton: {
+    backgroundColor: '#e7f6ff',
+    borderColor: '#a8d9ff',
   },
   removeButton: {
     backgroundColor: '#ffe5e5',
