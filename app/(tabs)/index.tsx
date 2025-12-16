@@ -23,6 +23,9 @@ export default function DashboardScreen() {
     recordCheckIn,
     getCapacityUsage,
     getStudentAccountSnapshot,
+    getActivePlanForStudent,
+    getWeeklyUsageForStudent,
+    planOptions,
     goals,
   } = useInstructorData();
   const [studentId, setStudentId] = useState<string | null>(null);
@@ -80,6 +83,21 @@ export default function DashboardScreen() {
   }, [getEnrollmentForStudent, studentId, upcomingSession]);
 
   const nextPayment = studentAccount?.nextPayment;
+
+  const activePlan = useMemo(
+    () => (studentId ? getActivePlanForStudent(studentId) : undefined),
+    [getActivePlanForStudent, studentId],
+  );
+
+  const activePlanOption = useMemo(
+    () => planOptions.find((option) => option.id === activePlan?.planOptionId),
+    [activePlan?.planOptionId, planOptions],
+  );
+
+  const weeklyUsage = useMemo(
+    () => (studentId ? getWeeklyUsageForStudent(studentId) : null),
+    [getWeeklyUsageForStudent, studentId],
+  );
 
   const activeGoals = useMemo(
     () =>
@@ -190,6 +208,42 @@ export default function DashboardScreen() {
           {checkInStatus ? (
             <ThemedText style={[styles.cardPrimaryText, styles.muted]}>{checkInStatus}</ThemedText>
           ) : null}
+        </ThemedView>
+
+        <ThemedView style={styles.card}>
+          <ThemedText type="subtitle">Seu plano</ThemedText>
+          {activePlanOption ? (
+            <>
+              <ThemedText type="title" style={styles.titleSpacing}>
+                {activePlanOption.weeklyClasses}x na semana · {activePlanOption.durationMonths} meses
+              </ThemedText>
+              <ThemedText style={styles.muted}>
+                {weeklyUsage ? `${weeklyUsage.remaining} aulas disponíveis nesta semana` : 'Calculando uso semanal...'}
+              </ThemedText>
+              <ThemedText style={styles.muted}>
+                {nextPayment ? `Próximo vencimento em ${nextPayment.payment.dueDate}` : 'Cobranças em dia.'}
+              </ThemedText>
+              <View style={styles.planActions}>
+                <Link href="/payments" asChild>
+                  <Pressable style={styles.managePlanButton}>
+                    <ThemedText type="defaultSemiBold" style={styles.managePlanText}>Gerenciar plano</ThemedText>
+                  </Pressable>
+                </Link>
+              </View>
+            </>
+          ) : (
+            <>
+              <ThemedText style={styles.muted}>
+                Você ainda não escolheu um plano. Selecione sua quantidade de aulas semanais para habilitar as
+                reservas.
+              </ThemedText>
+              <Link href="/payments" asChild>
+                <Pressable style={styles.managePlanButton}>
+                  <ThemedText type="defaultSemiBold" style={styles.managePlanText}>Escolher plano</ThemedText>
+                </Pressable>
+              </Link>
+            </>
+          )}
         </ThemedView>
 
         <ThemedView style={styles.card}>
@@ -382,5 +436,18 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 10,
     backgroundColor: '#0e9aed',
+  },
+  planActions: {
+    marginTop: 10,
+  },
+  managePlanButton: {
+    marginTop: 8,
+    backgroundColor: '#022a4c',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  managePlanText: {
+    color: '#fff',
   },
 });
