@@ -31,7 +31,6 @@ export default function ClassDetailsScreen() {
 
   const [statusMessage, setStatusMessage] = useState('');
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
-  const [totalPrice] = useState(120);
   const insets = useSafeAreaInsets();
 
   const currentWeekUsage = useMemo(
@@ -181,13 +180,8 @@ export default function ClassDetailsScreen() {
         <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Inscrição</ThemedText>
           <ThemedText style={styles.muted}>
-            Para confirmar sua vaga precisamos vincular sua conta e respeitar a capacidade da turma.
-          </ThemedText>
-          <ThemedText style={styles.priceRow}>
-            Valor total estimado: <ThemedText type="defaultSemiBold">R$ {totalPrice.toFixed(2)}</ThemedText>
-          </ThemedText>
-          <ThemedText style={styles.muted}>
-            O pagamento é feito pelo menu em &quot;Realizar pagamento&quot; quando estiver disponível.
+            As reservas usam apenas seu saldo semanal de aulas do plano ativo. Não geramos cobranças extras na
+            inscrição.
           </ThemedText>
           <Pressable style={styles.primaryButton} onPress={handleEnroll} disabled={!currentStudentId}>
             <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
@@ -347,9 +341,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-  },
-  priceRow: {
-    marginTop: 4,
   },
   primaryButton: {
     backgroundColor: '#0e9aed',
