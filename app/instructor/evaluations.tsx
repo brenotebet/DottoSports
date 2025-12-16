@@ -20,6 +20,7 @@ export default function EvaluationsScreen() {
 
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [historySearchTerm, setHistorySearchTerm] = useState('');
   const [isDropdownOpen, setDropdownOpen] = useState(false);
   const [date, setDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const [questionnaire, setQuestionnaire] = useState<Evaluation['questionnaire']>({
@@ -32,6 +33,15 @@ export default function EvaluationsScreen() {
   });
   const [notes, setNotes] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  const uniqueStudents = useMemo(() => {
+    const seen = new Set<string>();
+    return students.filter((student) => {
+      if (seen.has(student.id)) return false;
+      seen.add(student.id);
+      return true;
+    });
+  }, [students]);
 
   const resetForm = useCallback(() => {
     setDate(new Date().toISOString().slice(0, 10));
@@ -48,32 +58,55 @@ export default function EvaluationsScreen() {
   }, []);
 
   useEffect(() => {
-    if (students.length > 0 && !selectedStudentId) {
-      setSelectedStudentId(students[0].id);
+    if (uniqueStudents.length > 0 && !selectedStudentId) {
+      setSelectedStudentId(uniqueStudents[0].id);
     }
-  }, [selectedStudentId, students]);
+  }, [selectedStudentId, uniqueStudents]);
 
   useEffect(() => {
     resetForm();
   }, [resetForm, selectedStudentId]);
 
-  const evaluations = useMemo(
-    () => (selectedStudentId ? getStudentEvaluations(selectedStudentId) : []),
-    [getStudentEvaluations, selectedStudentId],
-  );
-
   const selectedStudent = useMemo(
-    () => students.find((student) => student.id === selectedStudentId) ?? null,
-    [selectedStudentId, students],
+    () => uniqueStudents.find((student) => student.id === selectedStudentId) ?? null,
+    [selectedStudentId, uniqueStudents],
   );
 
   const filteredStudents = useMemo(
     () =>
-      students.filter((student) =>
+      uniqueStudents.filter((student) =>
         student.fullName.toLowerCase().includes(searchTerm.trim().toLowerCase()),
       ),
-    [searchTerm, students],
+    [searchTerm, uniqueStudents],
   );
+
+  const allEvaluations = useMemo(() => {
+    return uniqueStudents
+      .flatMap((student) =>
+        getStudentEvaluations(student.id).map((evaluation) => ({ evaluation, student })),
+      )
+      .sort(
+        (a, b) => new Date(b.evaluation.date).getTime() - new Date(a.evaluation.date).getTime(),
+      );
+  }, [getStudentEvaluations, uniqueStudents]);
+
+  const filteredEvaluations = useMemo(() => {
+    const term = historySearchTerm.trim().toLowerCase();
+    if (!term) return allEvaluations;
+
+    return allEvaluations.filter(({ student, evaluation }) => {
+      const haystack = [
+        student.fullName,
+        student.phone,
+        evaluation.questionnaire.goalsFocus,
+        evaluation.notes ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(term);
+    });
+  }, [allEvaluations, historySearchTerm]);
 
   const handleSubmit = () => {
     if (!selectedStudentId) {
@@ -215,7 +248,7 @@ export default function EvaluationsScreen() {
             </View>
           )}
 
-          {!students.length && (
+          {!uniqueStudents.length && (
             <ThemedText style={styles.muted}>Nenhum aluno encontrado para atribuir.</ThemedText>
           )}
           {selectedStudent ? (
@@ -275,14 +308,24 @@ export default function EvaluationsScreen() {
         </ThemedView>
 
         <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Histórico</ThemedText>
-          {evaluations.length === 0 ? (
+          <View style={{ gap: 8 }}>
+            <ThemedText type="subtitle">Histórico</ThemedText>
+            <TextInput
+              placeholder="Buscar por cliente, foco ou observação"
+              placeholderTextColor={colorScheme === 'dark' ? '#7a8695' : '#7d8a96'}
+              value={historySearchTerm}
+              onChangeText={setHistorySearchTerm}
+              style={[styles.input, { borderColor: Colors[colorScheme ?? 'light'].icon }]}
+            />
+          </View>
+          {filteredEvaluations.length === 0 ? (
             <ThemedText style={styles.muted}>Nenhuma avaliação registrada até agora.</ThemedText>
           ) : (
             <View style={styles.list}>
-              {evaluations.map((evaluation) => (
+              {filteredEvaluations.map(({ evaluation, student }) => (
                 <View key={evaluation.id} style={styles.listItem}>
                   <View style={styles.listText}>
+                    <ThemedText style={styles.mutedSmall}>{student.fullName}</ThemedText>
                     <ThemedText type="defaultSemiBold">{evaluation.date}</ThemedText>
                     <ThemedText style={styles.muted}>
                       {evaluation.questionnaire.goalsFocus || 'Sem foco informado'}
