@@ -166,6 +166,9 @@ export type EvaluationQuestionnaire = {
   nutrition: string;
   sleepQuality: string;
   stressLevel?: string;
+  weightKg?: number;
+  heightMeters?: number;
+  heightCentimeters?: number;
 };
 
 export type Evaluation = {
