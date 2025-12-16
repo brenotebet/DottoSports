@@ -695,51 +695,9 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         waitlisted: isWaitlist,
       });
 
-      const hasExistingPayment = payments.some((payment) => payment.enrollmentId === enrollment.id);
-      if (!hasExistingPayment) {
-        const dueDate = new Date(now);
-        dueDate.setDate(dueDate.getDate() + 3);
-
-        const amount = 120;
-        const description = classInfo
-          ? `Mensalidade - ${classInfo.title}`
-          : 'Mensalidade da turma inscrita';
-
-        const payment: Payment = {
-          id: generateId('payment'),
-          studentId,
-          enrollmentId: enrollment.id,
-          amount,
-          currency: 'BRL',
-          method: 'credit_card',
-          status: 'pending',
-          dueDate: dueDate.toISOString().slice(0, 10),
-          description,
-        };
-
-        const invoice: Invoice = {
-          id: generateId('invoice'),
-          paymentId: payment.id,
-          enrollmentId: enrollment.id,
-          issueDate: now.slice(0, 10),
-          reference: `${description} - ${dueDate.getMonth() + 1}/${dueDate.getFullYear()}`,
-          total: amount,
-          currency: 'BRL',
-          status: 'open',
-        };
-
-        setPayments((prev) => [payment, ...prev]);
-        setInvoices((prev) => [invoice, ...prev]);
-        logEvent('payment_posted', 'Cobrança inicial gerada após inscrição.', {
-          paymentId: payment.id,
-          enrollmentId: enrollment.id,
-          status: payment.status,
-          amount,
-        });
-      }
       return { enrollment, isWaitlist, alreadyEnrolled: false };
     },
-    [classes, enrollments, logEvent, payments],
+    [classes, enrollments, logEvent],
   );
 
   const getCapacityUsage = useCallback(
