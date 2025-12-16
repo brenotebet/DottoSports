@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, type Href } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View, Pressable, Alert } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -144,8 +144,8 @@ export default function DashboardScreen() {
     [goals, studentId],
   );
 
-  const highlights = [
-    { label: 'Aulas inscritas', value: `${studentEnrollments.length} turmas`, href: '/(tabs)/classes/registered' },
+  const highlights: { label: string; value: string; href?: Href }[] = [
+    { label: 'Aulas inscritas', value: `${studentEnrollments.length} turmas`, href: '/classes/registered' },
     {
       label: 'Próxima cobrança',
       value: nextPayment ? `Vence ${nextPayment.payment.dueDate}` : 'Nenhuma pendente',
