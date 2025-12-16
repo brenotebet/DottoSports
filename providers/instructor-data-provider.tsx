@@ -632,6 +632,21 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const enrollStudentInClass = useCallback(
     (studentId: string, classId: string) => {
+      const activePlan = getActivePlanForStudent(studentId);
+      const weeklyUsage = getWeeklyUsageForStudent(studentId);
+
+      if (!activePlan) {
+        const message = 'Um plano ativo é necessário para se inscrever em aulas.';
+        logEvent('validation_error', message, { studentId, classId });
+        throw new Error(message);
+      }
+
+      if (weeklyUsage.limit === 0 || weeklyUsage.remaining <= 0) {
+        const message = 'Limite semanal atingido. Selecione um plano com mais aulas ou espere a próxima semana.';
+        logEvent('validation_error', message, { studentId, classId, weekStart: weeklyUsage.weekStart });
+        throw new Error(message);
+      }
+
       const existing = enrollments.find(
         (enrollment) => enrollment.studentId === studentId && enrollment.classId === classId,
       );
@@ -697,7 +712,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       return { enrollment, isWaitlist, alreadyEnrolled: false };
     },
-    [classes, enrollments, logEvent],
+    [classes, enrollments, getActivePlanForStudent, getWeeklyUsageForStudent, logEvent],
   );
 
   const getCapacityUsage = useCallback(
