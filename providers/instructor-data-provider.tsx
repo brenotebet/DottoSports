@@ -191,6 +191,26 @@ const InstructorDataContext = createContext<InstructorDataContextValue | undefin
 const generateId = (prefix: string) => `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
 const findAccountByEmail = (email: string) =>
   seedAccounts.find((account) => account.email.toLowerCase() === email.toLowerCase());
+const ALLOWED_WEEKLY_CLASSES = [2, 4, 6];
+
+const sanitizePlanOptions = (options: PlanOption[]) =>
+  options.filter((option) => ALLOWED_WEEKLY_CLASSES.includes(option.weeklyClasses));
+
+const ensurePlanCoverage = (options: PlanOption[]) => {
+  const sanitizedSeed = sanitizePlanOptions(seedPlanOptions);
+  const sanitizedStored = sanitizePlanOptions(options);
+  const matrix = new Map<string, PlanOption>();
+
+  sanitizedSeed.forEach((option) =>
+    matrix.set(`${option.weeklyClasses}-${option.durationMonths}`, option),
+  );
+
+  sanitizedStored.forEach((option) =>
+    matrix.set(`${option.weeklyClasses}-${option.durationMonths}`, option),
+  );
+
+  return Array.from(matrix.values());
+};
 
 const resolvePaymentStatus = (
   payments: Payment[],
@@ -334,7 +354,9 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [settlements, setSettlements] = useState<Settlement[]>(seedSettlements);
   const [evaluations, setEvaluations] = useState<Evaluation[]>(seedEvaluations);
   const [goals, setGoals] = useState<Goal[]>(seedGoals);
-  const [planOptions, setPlanOptions] = useState<PlanOption[]>(seedPlanOptions);
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>(
+    ensurePlanCoverage(seedPlanOptions),
+  );
   const [studentPlans, setStudentPlans] = useState<StudentPlan[]>(seedStudentPlans);
   const [sessionBookings, setSessionBookings] = useState<SessionBooking[]>(seedSessionBookings);
   const [creditReinstatements, setCreditReinstatements] = useState<CreditReinstatement[]>(seedCreditReinstatements);
@@ -382,7 +404,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         if (storedData.settlements) setSettlements(storedData.settlements);
         if (storedData.evaluations) setEvaluations(storedData.evaluations);
         if (storedData.goals) setGoals(storedData.goals);
-        if (storedData.planOptions) setPlanOptions(storedData.planOptions);
+        if (storedData.planOptions) setPlanOptions(ensurePlanCoverage(storedData.planOptions));
         if (storedData.studentPlans) setStudentPlans(storedData.studentPlans);
         if (storedData.sessionBookings) setSessionBookings(storedData.sessionBookings);
         if (storedData.creditReinstatements) setCreditReinstatements(storedData.creditReinstatements);
@@ -624,6 +646,9 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const option = planOptions.find((item) => item.id === planOptionId);
       if (!option) {
         throw new Error('Plano selecionado não encontrado.');
+      }
+      if (!ALLOWED_WEEKLY_CLASSES.includes(option.weeklyClasses)) {
+        throw new Error('Combinação de aulas semanais indisponível.');
       }
 
       const now = new Date();
