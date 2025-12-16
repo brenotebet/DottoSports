@@ -1,25 +1,25 @@
 import type {
   Attendance,
   ClassSession,
+  CreditReinstatement,
   DatabaseSchema,
   Enrollment,
   Evaluation,
   Goal,
   InstructorProfile,
   Invoice,
-  PlanOption,
   Payment,
   PaymentIntent,
   PaymentSession,
+  PlanOption,
   Receipt,
-  Settlement,
-  StudentProfile,
   SessionBooking,
+  Settlement,
   StudentPlan,
+  StudentProfile,
   TrainingClass,
   UserAccount,
   UserRole,
-  CreditReinstatement,
 } from './schema';
 
 type SeedAccount = UserAccount & {
@@ -98,10 +98,10 @@ export const studentProfiles: StudentProfile[] = [
 
 export const planOptions: PlanOption[] = [
   { id: 'plan-2-1', weeklyClasses: 2, durationMonths: 1, priceMonthly: 239, priceUpfront: 239, currency: 'BRL' },
-  { id: 'plan-4-1', weeklyClasses: 4, durationMonths: 1, priceMonthly: 339, priceUpfront: 339, currency: 'BRL' },
+  { id: 'plan-4-1', weeklyClasses: 4, durationMonths: 1, priceMonthly: 369, priceUpfront: 339, currency: 'BRL' },
   { id: 'plan-6-1', weeklyClasses: 6, durationMonths: 1, priceMonthly: 439, priceUpfront: 439, currency: 'BRL' },
   { id: 'plan-2-3', weeklyClasses: 2, durationMonths: 3, priceMonthly: 199, priceUpfront: 597, currency: 'BRL' },
-  { id: 'plan-4-3', weeklyClasses: 4, durationMonths: 3, priceMonthly: 299, priceUpfront: 897, currency: 'BRL' },
+  { id: 'plan-4-3', weeklyClasses: 4, durationMonths: 3, priceMonthly: 319, priceUpfront: 957, currency: 'BRL' },
   { id: 'plan-6-3', weeklyClasses: 6, durationMonths: 3, priceMonthly: 399, priceUpfront: 1197, currency: 'BRL' },
   { id: 'plan-2-6', weeklyClasses: 2, durationMonths: 6, priceMonthly: 179, priceUpfront: 1074, currency: 'BRL' },
   { id: 'plan-4-6', weeklyClasses: 4, durationMonths: 6, priceMonthly: 269, priceUpfront: 1614, currency: 'BRL' },

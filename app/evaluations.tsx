@@ -241,6 +241,6 @@ const styles = StyleSheet.create({
   mutedSmall: {
     opacity: 0.75,
     fontSize: 12,
-    fontFamily: Fonts.regular,
+    fontFamily: Fonts.mono,
   },
 });
