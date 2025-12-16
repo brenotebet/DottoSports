@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -274,12 +273,13 @@ export default function EvaluationsScreen() {
       <TopBar title="Avaliações" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={insets.top + 80}>
+        behavior="padding"
+        keyboardVerticalOffset={insets.top + 12}>
         <ScrollView
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled">
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive">
           <ThemedText type="title" style={styles.heading}>Registro de avaliações</ThemedText>
           <ThemedText style={styles.leadText}>
             Preencha o questionário físico e acompanhe as avaliações anteriores para manter o progresso claro.
@@ -482,8 +482,8 @@ export default function EvaluationsScreen() {
               {filteredEvaluations.map(({ evaluation, student }) => (
                 <View key={evaluation.id} style={styles.listItem}>
                   <View style={styles.listText}>
-                    <ThemedText style={styles.mutedSmall}>{student.fullName}</ThemedText>
-                    <ThemedText type="defaultSemiBold">{evaluation.date}</ThemedText>
+                    <ThemedText type="defaultSemiBold">{student.fullName}</ThemedText>
+                    <ThemedText style={styles.mutedSmall}>{evaluation.date}</ThemedText>
                     <ThemedText style={styles.muted}>
                       {evaluation.questionnaire.goalsFocus || 'Sem foco informado'}
                     </ThemedText>
@@ -535,6 +535,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   container: {
+    flexGrow: 1,
     paddingHorizontal: 20,
     paddingBottom: 24,
     gap: 16,
