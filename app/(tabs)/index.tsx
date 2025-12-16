@@ -102,6 +102,18 @@ export default function DashboardScreen() {
     [getCapacityUsage, upcomingSession?.classId],
   );
 
+  const upcomingSessionDescription = useMemo(() => {
+    if (!upcomingSession) return null;
+    const formattedDate = new Date(upcomingSession.startTime).toLocaleString('pt-BR', {
+      weekday: 'short',
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return `${sessionClass?.title ?? 'Aula inscrita'} · ${formattedDate}`;
+  }, [sessionClass?.title, upcomingSession]);
+
   const enrollment = useMemo(() => {
     if (!studentId || !upcomingSession) return null;
     return getEnrollmentForStudent(studentId, upcomingSession.classId) ?? null;
@@ -140,7 +152,11 @@ export default function DashboardScreen() {
     },
     {
       label: 'Check-in rápido',
-      value: enrollment ? (enrollment.status === 'waitlist' ? 'Na espera' : 'Liberado') : 'Precisa inscrever',
+      value:
+        upcomingSessionDescription ??
+        (studentEnrollments.length > 0
+          ? 'Sem aulas inscritas no momento'
+          : 'Precisa inscrever'),
     },
   ];
   const hasEnrollments = studentEnrollments.length > 0;
@@ -206,6 +222,9 @@ export default function DashboardScreen() {
               : sessionClass
                 ? `Capacidade ${sessionClass.capacity}`
                 : 'Nenhuma turma ativa'}
+          </ThemedText>
+          <ThemedText style={[styles.cardPrimaryText, styles.muted]}>
+            {upcomingSessionDescription ?? 'Nenhuma aula inscrita para check-in.'}
           </ThemedText>
           <View style={styles.rowActions}>
             <Link href="/(tabs)/classes" asChild>

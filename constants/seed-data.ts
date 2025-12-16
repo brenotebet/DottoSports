@@ -98,21 +98,16 @@ export const studentProfiles: StudentProfile[] = [
 
 export const planOptions: PlanOption[] = [
   { id: 'plan-2-1', weeklyClasses: 2, durationMonths: 1, priceMonthly: 239, priceUpfront: 239, currency: 'BRL' },
-  { id: 'plan-3-1', weeklyClasses: 3, durationMonths: 1, priceMonthly: 339, priceUpfront: 339, currency: 'BRL' },
-  { id: 'plan-4-1', weeklyClasses: 4, durationMonths: 1, priceMonthly: 439, priceUpfront: 439, currency: 'BRL' },
+  { id: 'plan-4-1', weeklyClasses: 4, durationMonths: 1, priceMonthly: 339, priceUpfront: 339, currency: 'BRL' },
+  { id: 'plan-6-1', weeklyClasses: 6, durationMonths: 1, priceMonthly: 439, priceUpfront: 439, currency: 'BRL' },
   { id: 'plan-2-3', weeklyClasses: 2, durationMonths: 3, priceMonthly: 199, priceUpfront: 597, currency: 'BRL' },
-  { id: 'plan-3-3', weeklyClasses: 3, durationMonths: 3, priceMonthly: 299, priceUpfront: 897, currency: 'BRL' },
-  { id: 'plan-4-3', weeklyClasses: 4, durationMonths: 3, priceMonthly: 399, priceUpfront: 1197, currency: 'BRL' },
-  { id: 'plan-5-3', weeklyClasses: 5, durationMonths: 3, priceMonthly: 459, priceUpfront: 1377, currency: 'BRL' },
+  { id: 'plan-4-3', weeklyClasses: 4, durationMonths: 3, priceMonthly: 299, priceUpfront: 897, currency: 'BRL' },
+  { id: 'plan-6-3', weeklyClasses: 6, durationMonths: 3, priceMonthly: 399, priceUpfront: 1197, currency: 'BRL' },
   { id: 'plan-2-6', weeklyClasses: 2, durationMonths: 6, priceMonthly: 179, priceUpfront: 1074, currency: 'BRL' },
-  { id: 'plan-3-6', weeklyClasses: 3, durationMonths: 6, priceMonthly: 269, priceUpfront: 1614, currency: 'BRL' },
-  { id: 'plan-4-6', weeklyClasses: 4, durationMonths: 6, priceMonthly: 369, priceUpfront: 2214, currency: 'BRL' },
-  { id: 'plan-5-6', weeklyClasses: 5, durationMonths: 6, priceMonthly: 469, priceUpfront: 2814, currency: 'BRL' },
-  { id: 'plan-6-6', weeklyClasses: 6, durationMonths: 6, priceMonthly: 499, priceUpfront: 2994, currency: 'BRL' },
+  { id: 'plan-4-6', weeklyClasses: 4, durationMonths: 6, priceMonthly: 269, priceUpfront: 1614, currency: 'BRL' },
+  { id: 'plan-6-6', weeklyClasses: 6, durationMonths: 6, priceMonthly: 369, priceUpfront: 2214, currency: 'BRL' },
   { id: 'plan-2-12', weeklyClasses: 2, durationMonths: 12, priceMonthly: 139, priceUpfront: 1668, currency: 'BRL' },
-  { id: 'plan-3-12', weeklyClasses: 3, durationMonths: 12, priceMonthly: 239, priceUpfront: 2868, currency: 'BRL' },
-  { id: 'plan-4-12', weeklyClasses: 4, durationMonths: 12, priceMonthly: 329, priceUpfront: 3948, currency: 'BRL' },
-  { id: 'plan-5-12', weeklyClasses: 5, durationMonths: 12, priceMonthly: 429, priceUpfront: 5148, currency: 'BRL' },
+  { id: 'plan-4-12', weeklyClasses: 4, durationMonths: 12, priceMonthly: 239, priceUpfront: 2868, currency: 'BRL' },
   { id: 'plan-6-12', weeklyClasses: 6, durationMonths: 12, priceMonthly: 329, priceUpfront: 3948, currency: 'BRL' },
 ];
 
@@ -120,7 +115,7 @@ export const studentPlans: StudentPlan[] = [
   {
     id: 'membership-1',
     studentId: 'student-1',
-    planOptionId: 'plan-3-1',
+    planOptionId: 'plan-4-1',
     billing: 'recurring',
     startDate: '2024-12-01',
     endDate: '2025-01-01',
@@ -292,7 +287,7 @@ export const payments: Payment[] = [
     method: 'pix',
     status: 'pending',
     dueDate: '2024-12-15',
-    description: 'Mensalidade 3x semana (1 mês)',
+    description: 'Mensalidade 4x semana (1 mês)',
     invoiceId: 'invoice-1',
   },
 ];
@@ -307,7 +302,7 @@ export const invoices: Invoice[] = [
     total: 339,
     currency: 'BRL',
     status: 'open',
-    notes: 'Gerado automaticamente para cobrança mensal.',
+    notes: 'Gerado automaticamente para cobrança mensal do plano 4x/semana.',
   },
 ];
 

@@ -145,6 +145,15 @@ export default function ClassCatalogScreen() {
                     ))}
                   </View>
 
+                  <ThemedView style={styles.scheduleRow}>
+                    <ThemedText type="defaultSemiBold">Dias e horários</ThemedText>
+                    <ThemedText>
+                      {trainingClass.schedule
+                        .map((slot) => `${slot.day} · ${slot.start}-${slot.end}`)
+                        .join('  |  ')}
+                    </ThemedText>
+                  </ThemedView>
+
                   {nextSession && (
                     <ThemedView style={styles.sessionRow}>
                       <ThemedText type="defaultSemiBold">
@@ -286,6 +295,12 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     textTransform: 'capitalize',
+  },
+  scheduleRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+    paddingTop: 10,
+    gap: 4,
   },
   sessionRow: {
     borderTopWidth: StyleSheet.hairlineWidth,
