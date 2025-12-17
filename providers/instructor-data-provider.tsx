@@ -40,6 +40,7 @@ import {
   seedAccounts,
 } from '@/constants/seed-data';
 import { useAuth } from '@/providers/auth-provider';
+import { auth } from '@/services/firebase';
 import {
   fetchInstructorData,
   saveInstructorData,
@@ -306,7 +307,7 @@ const defaultCard: CardOnFile = {
 const MAX_EVENT_ENTRIES = 50;
 
 export function InstructorDataProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, initializing } = useAuth();
   const isInstructor = user?.role === 'INSTRUCTOR';
   const dataOwnerUid = useMemo(
     () => (isInstructor ? user?.uid : process.env.EXPO_PUBLIC_INSTRUCTOR_OWNER_UID ?? process.env.EXPO_PUBLIC_PRIMARY_INSTRUCTOR_UID ?? ''),
@@ -441,9 +442,21 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const hydrateFromFirestore = async () => {
+      if (initializing) return;
+
       if (!dataOwnerUid) {
         console.warn(
           'Nenhum proprietário de dados configurado. Defina EXPO_PUBLIC_INSTRUCTOR_OWNER_UID para que alunos visualizem os dados do instrutor.',
+        );
+        resetToSeedState();
+        lastSyncedSignature.current = null;
+        setHydrated(true);
+        return;
+      }
+
+      if (auth.currentUser?.uid !== dataOwnerUid) {
+        console.warn(
+          'Sessão sem permissão para sincronizar dados do instrutor. Entre com a conta do instrutor para restaurar os dados.',
         );
         resetToSeedState();
         lastSyncedSignature.current = null;
@@ -493,10 +506,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [applyPersistedData, computeSignature, dataOwnerUid, resetToSeedState]);
+  }, [applyPersistedData, computeSignature, dataOwnerUid, initializing, resetToSeedState]);
 
   const reloadFromStorage = useCallback(async () => {
-    if (!dataOwnerUid) return;
+    if (!dataOwnerUid || auth.currentUser?.uid !== dataOwnerUid) return;
 
     try {
       const storedData = await fetchInstructorData(dataOwnerUid);
@@ -511,7 +524,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   }, [applyPersistedData, computeSignature, dataOwnerUid]);
 
   useEffect(() => {
-    if (!isInstructor || !dataOwnerUid || !hydrated) return;
+    if (!isInstructor || !dataOwnerUid || !hydrated || auth.currentUser?.uid !== dataOwnerUid) return;
 
     const payload = buildPersistedState();
     const signature = computeSignature(payload);
