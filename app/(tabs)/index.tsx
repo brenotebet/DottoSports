@@ -1,6 +1,6 @@
 import { Link, type Href } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View, Pressable, Alert } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, View, Pressable, Alert, RefreshControl } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -28,9 +28,11 @@ export default function DashboardScreen() {
     sessionBookings,
     planOptions,
     goals,
+    reloadFromStorage,
   } = useInstructorData();
   const [studentId, setStudentId] = useState<string | null>(null);
   const [checkInStatus, setCheckInStatus] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -138,6 +140,15 @@ export default function DashboardScreen() {
     [goals, studentId],
   );
 
+  const handleReload = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await reloadFromStorage();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reloadFromStorage]);
+
   const highlights: { label: string; value: string; href?: Href }[] = [
     { label: 'Aulas inscritas', value: `${studentEnrollments.length} turmas`, href: '/classes/registered' },
     {
@@ -189,7 +200,14 @@ export default function DashboardScreen() {
     <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top + 12 }]}>
       <ScrollView
         contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}>
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleReload}
+            tintColor={Colors[colorScheme ?? 'light'].tint}
+          />
+        }>
         <ThemedText type="title" style={styles.heading}>
           Bem-vindo(a) de volta!
         </ThemedText>
