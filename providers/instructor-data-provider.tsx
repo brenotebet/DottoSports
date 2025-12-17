@@ -1,5 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { File, Paths } from 'expo-file-system';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type {
   Attendance,
@@ -40,6 +39,13 @@ import {
   studentProfiles,
   seedAccounts,
 } from '@/constants/seed-data';
+import { useAuth } from '@/providers/auth-provider';
+import {
+  fetchInstructorData,
+  saveInstructorData,
+  subscribeToInstructorData,
+  type InstructorSyncPayload,
+} from '@/services/firestore-instructor';
 
 export type RosterEntry = {
   enrollment: Enrollment;
@@ -299,50 +305,8 @@ const defaultCard: CardOnFile = {
 
 const MAX_EVENT_ENTRIES = 50;
 
-type PersistedInstructorData = {
-  classes: TrainingClass[];
-  sessions: ClassSession[];
-  enrollments: Enrollment[];
-  attendance: Attendance[];
-  payments: Payment[];
-  invoices: Invoice[];
-  paymentIntents: PaymentIntent[];
-  paymentSessions: PaymentSession[];
-  receipts: Receipt[];
-  settlements: Settlement[];
-  students: StudentProfile[];
-  evaluations: Evaluation[];
-  goals: Goal[];
-  planOptions: PlanOption[];
-  studentPlans: StudentPlan[];
-  sessionBookings: SessionBooking[];
-  creditReinstatements: CreditReinstatement[];
-  cardOnFile: CardOnFile;
-  events: SystemEvent[];
-};
-
-const instructorStateFile = (() => {
-  const candidates = [
-    () => Paths.document,
-    () => Paths.cache,
-  ];
-
-  for (const getDirectory of candidates) {
-    try {
-      const directory = getDirectory();
-
-      if (directory?.uri) {
-        return new File(directory, 'instructor-data.json');
-      }
-    } catch (error) {
-      console.warn('Não foi possível resolver um diretório para os dados do instrutor', error);
-    }
-  }
-
-  return null;
-})();
-
 export function InstructorDataProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [classes, setClasses] = useState<TrainingClass[]>(seedClasses);
   const [sessions, setSessions] = useState<ClassSession[]>(seedSessions);
   const [enrollments, setEnrollments] = useState<Enrollment[]>(seedEnrollments);
@@ -365,8 +329,75 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [cardOnFile, setCardOnFile] = useState<CardOnFile>(defaultCard);
   const [events, setEvents] = useState<SystemEvent[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const lastSyncedSignature = useRef<string | null>(null);
 
-  const applyPersistedData = useCallback((storedData: Partial<PersistedInstructorData>) => {
+  const buildPersistedState = useCallback((): InstructorSyncPayload => ({
+    classes,
+    sessions,
+    enrollments,
+    attendance,
+    payments,
+    invoices,
+    paymentIntents,
+    paymentSessions,
+    receipts,
+    settlements,
+    evaluations,
+    goals,
+    planOptions,
+    studentPlans,
+    sessionBookings,
+    creditReinstatements,
+    students,
+    cardOnFile,
+    events,
+  }), [
+    classes,
+    sessions,
+    enrollments,
+    attendance,
+    payments,
+    invoices,
+    paymentIntents,
+    paymentSessions,
+    receipts,
+    settlements,
+    evaluations,
+    goals,
+    planOptions,
+    studentPlans,
+    sessionBookings,
+    creditReinstatements,
+    students,
+    cardOnFile,
+    events,
+  ]);
+
+  const computeSignature = useCallback((payload: InstructorSyncPayload) => JSON.stringify(payload), []);
+
+  const resetToSeedState = useCallback(() => {
+    setClasses(seedClasses);
+    setSessions(seedSessions);
+    setEnrollments(seedEnrollments);
+    setAttendance(seedAttendance);
+    setPayments(seedPayments);
+    setInvoices(seedInvoices);
+    setPaymentIntents(seedPaymentIntents);
+    setPaymentSessions(seedPaymentSessions);
+    setReceipts(seedReceipts);
+    setSettlements(seedSettlements);
+    setEvaluations(seedEvaluations);
+    setGoals(seedGoals);
+    setPlanOptions(ensurePlanCoverage(seedPlanOptions));
+    setStudentPlans(seedStudentPlans);
+    setSessionBookings(seedSessionBookings);
+    setCreditReinstatements(seedCreditReinstatements);
+    setStudents(studentProfiles);
+    setCardOnFile(defaultCard);
+    setEvents([]);
+  }, []);
+
+  const applyPersistedData = useCallback((storedData: Partial<InstructorSyncPayload>) => {
     if (storedData.classes) setClasses(storedData.classes);
     if (storedData.sessions) setSessions(storedData.sessions);
     if (storedData.enrollments) setEnrollments(storedData.enrollments);
@@ -400,90 +431,116 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const hydrateFromStorage = useCallback(async () => {
-    if (!instructorStateFile) {
-      setHydrated(true);
-      return;
-    }
-
-    try {
-      if (instructorStateFile.exists) {
-        const storedData = JSON.parse(await instructorStateFile.text()) as Partial<PersistedInstructorData>;
-        applyPersistedData(storedData);
-      }
-    } catch (error) {
-      console.warn('Não foi possível restaurar os dados do instrutor', error);
-    } finally {
-      setHydrated(true);
-    }
-  }, [applyPersistedData]);
-
   useEffect(() => {
-    void hydrateFromStorage();
-  }, [hydrateFromStorage]);
+    let unsubscribe: (() => void) | undefined;
+    let cancelled = false;
+
+    const hydrateFromFirestore = async () => {
+      if (!user) {
+        resetToSeedState();
+        lastSyncedSignature.current = null;
+        setHydrated(true);
+        return;
+      }
+
+      setHydrated(false);
+
+      try {
+        const storedData = await fetchInstructorData(user.uid);
+
+        if (storedData) {
+          applyPersistedData(storedData);
+          lastSyncedSignature.current = computeSignature(storedData);
+        }
+      } catch (error) {
+        console.warn('Não foi possível restaurar os dados do instrutor', error);
+      } finally {
+        if (!cancelled) {
+          setHydrated(true);
+        }
+      }
+
+      if (cancelled) return;
+
+      unsubscribe = subscribeToInstructorData(
+        user.uid,
+        (payload) => {
+          if (!payload) return;
+
+          const signature = computeSignature(payload);
+          if (lastSyncedSignature.current === signature) return;
+
+          lastSyncedSignature.current = signature;
+          applyPersistedData(payload);
+        },
+        (error) => {
+          console.warn('Não foi possível receber atualizações do instrutor', error);
+        },
+      );
+    };
+
+    void hydrateFromFirestore();
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [applyPersistedData, computeSignature, resetToSeedState, user]);
 
   const reloadFromStorage = useCallback(async () => {
-    if (!instructorStateFile) return;
+    if (!user) return;
 
     try {
-      if (!instructorStateFile.exists) return;
-      const storedData = JSON.parse(await instructorStateFile.text()) as Partial<PersistedInstructorData>;
-      applyPersistedData(storedData);
+      const storedData = await fetchInstructorData(user.uid);
+
+      if (storedData) {
+        applyPersistedData(storedData);
+        lastSyncedSignature.current = computeSignature(storedData);
+      }
     } catch (error) {
       console.warn('Não foi possível recarregar os dados do instrutor', error);
     }
-  }, [applyPersistedData]);
+  }, [applyPersistedData, computeSignature, user]);
 
   useEffect(() => {
-    if (!instructorStateFile || !hydrated) return;
+    if (!user || !hydrated) return;
 
-    try {
-      const payload: PersistedInstructorData = {
-        classes,
-        sessions,
-        enrollments,
-        attendance,
-        payments,
-        invoices,
-        paymentIntents,
-        paymentSessions,
-        receipts,
-        settlements,
-        evaluations,
-        goals,
-        planOptions,
-        studentPlans,
-        sessionBookings,
-        creditReinstatements,
-        students,
-        cardOnFile,
-        events,
-      };
+    const payload = buildPersistedState();
+    const signature = computeSignature(payload);
 
-      instructorStateFile.write(JSON.stringify(payload));
-    } catch (error) {
-      console.warn('Não foi possível salvar os dados do instrutor', error);
-    }
+    if (lastSyncedSignature.current === signature) return;
+
+    void saveInstructorData(user.uid, payload)
+      .then(() => {
+        lastSyncedSignature.current = signature;
+      })
+      .catch((error) => {
+        console.warn('Não foi possível salvar os dados do instrutor', error);
+      });
   }, [
     attendance,
+    buildPersistedState,
     cardOnFile,
     classes,
+    computeSignature,
+    creditReinstatements,
     enrollments,
+    evaluations,
+    events,
+    goals,
     hydrated,
     invoices,
-    payments,
     paymentIntents,
     paymentSessions,
+    payments,
+    planOptions,
     receipts,
-    evaluations,
-    goals,
     sessions,
     settlements,
-    students,
-    planOptions,
     studentPlans,
     sessionBookings,
-    creditReinstatements,
+    students,
+    user,
   ]);
 
   const ensureStudentProfile = useCallback((email: string, displayName: string) => {
