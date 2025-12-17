@@ -308,10 +308,11 @@ const MAX_EVENT_ENTRIES = 50;
 
 export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const { user, initializing } = useAuth();
-  const isInstructor = user?.role === 'INSTRUCTOR';
+  const envOwnerUid =
+    process.env.EXPO_PUBLIC_INSTRUCTOR_OWNER_UID ?? process.env.EXPO_PUBLIC_PRIMARY_INSTRUCTOR_UID;
   const dataOwnerUid = useMemo(
-    () => (isInstructor ? user?.uid : process.env.EXPO_PUBLIC_INSTRUCTOR_OWNER_UID ?? process.env.EXPO_PUBLIC_PRIMARY_INSTRUCTOR_UID ?? ''),
-    [isInstructor, user?.uid],
+    () => envOwnerUid ?? user?.uid ?? '',
+    [envOwnerUid, user?.uid],
   );
   const [classes, setClasses] = useState<TrainingClass[]>(seedClasses);
   const [sessions, setSessions] = useState<ClassSession[]>(seedSessions);
@@ -425,6 +426,20 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     if (storedData.events) setEvents(storedData.events);
   }, []);
 
+  const syncFromPayload = useCallback(
+    (payload: InstructorSyncPayload | null) => {
+      if (!payload) {
+        resetToSeedState();
+        lastSyncedSignature.current = null;
+        return;
+      }
+
+      applyPersistedData(payload);
+      lastSyncedSignature.current = computeSignature(payload);
+    },
+    [applyPersistedData, computeSignature, resetToSeedState],
+  );
+
   const logEvent = useCallback(
     (type: SystemEvent['type'], message: string, context?: Record<string, unknown>) => {
       setEvents((prev) =>
@@ -448,18 +463,14 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         console.warn(
           'Nenhum proprietário de dados configurado. Defina EXPO_PUBLIC_INSTRUCTOR_OWNER_UID para que alunos visualizem os dados do instrutor.',
         );
-        resetToSeedState();
-        lastSyncedSignature.current = null;
+        syncFromPayload(null);
         setHydrated(true);
         return;
       }
 
-      if (auth.currentUser?.uid !== dataOwnerUid) {
-        console.warn(
-          'Sessão sem permissão para sincronizar dados do instrutor. Entre com a conta do instrutor para restaurar os dados.',
-        );
-        resetToSeedState();
-        lastSyncedSignature.current = null;
+      if (!auth.currentUser) {
+        console.warn('Sessão não autenticada. Exibindo dados locais até que um usuário entre no aplicativo.');
+        syncFromPayload(null);
         setHydrated(true);
         return;
       }
@@ -468,10 +479,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       try {
         const storedData = await fetchInstructorData(dataOwnerUid);
-
-        if (storedData) {
-          applyPersistedData(storedData);
-          lastSyncedSignature.current = computeSignature(storedData);
+        if (!cancelled) {
+          syncFromPayload(storedData);
         }
       } catch (error) {
         console.warn('Não foi possível restaurar os dados do instrutor', error);
@@ -491,8 +500,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           const signature = computeSignature(payload);
           if (lastSyncedSignature.current === signature) return;
 
-          lastSyncedSignature.current = signature;
-          applyPersistedData(payload);
+          syncFromPayload(payload);
         },
         (error) => {
           console.warn('Não foi possível receber atualizações do instrutor', error);
@@ -506,25 +514,26 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [applyPersistedData, computeSignature, dataOwnerUid, initializing, resetToSeedState]);
+  }, [computeSignature, dataOwnerUid, initializing, syncFromPayload]);
 
   const reloadFromStorage = useCallback(async () => {
-    if (!dataOwnerUid || auth.currentUser?.uid !== dataOwnerUid) return;
+    if (!dataOwnerUid || !auth.currentUser) return;
 
     try {
       const storedData = await fetchInstructorData(dataOwnerUid);
 
       if (storedData) {
-        applyPersistedData(storedData);
-        lastSyncedSignature.current = computeSignature(storedData);
+        syncFromPayload(storedData);
       }
     } catch (error) {
       console.warn('Não foi possível recarregar os dados do instrutor', error);
     }
-  }, [applyPersistedData, computeSignature, dataOwnerUid]);
+  }, [dataOwnerUid, syncFromPayload]);
+
+  const canPersistSharedState = Boolean(dataOwnerUid && auth.currentUser);
 
   useEffect(() => {
-    if (!isInstructor || !dataOwnerUid || !hydrated || auth.currentUser?.uid !== dataOwnerUid) return;
+    if (!hydrated || !canPersistSharedState) return;
 
     const payload = buildPersistedState();
     const signature = computeSignature(payload);
@@ -542,6 +551,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     attendance,
     buildPersistedState,
     cardOnFile,
+    canPersistSharedState,
     classes,
     computeSignature,
     creditReinstatements,
@@ -562,7 +572,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     studentPlans,
     sessionBookings,
     students,
-    isInstructor,
   ]);
 
   const ensureStudentProfile = useCallback((email: string, displayName: string) => {
