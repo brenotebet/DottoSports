@@ -305,16 +305,16 @@ const defaultCard: CardOnFile = {
   label: 'Visa •••• 4242',
 };
 
+const SHARED_INSTRUCTOR_DATA_OWNER =
+  process.env.EXPO_PUBLIC_INSTRUCTOR_OWNER_UID ??
+  process.env.EXPO_PUBLIC_PRIMARY_INSTRUCTOR_UID ??
+  'shared-instructor-data';
+
 const MAX_EVENT_ENTRIES = 50;
 
 export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const { user, initializing } = useAuth();
-  const envOwnerUid =
-    process.env.EXPO_PUBLIC_INSTRUCTOR_OWNER_UID ?? process.env.EXPO_PUBLIC_PRIMARY_INSTRUCTOR_UID;
-  const dataOwnerUid = useMemo(
-    () => user?.uid ?? envOwnerUid ?? '',
-    [envOwnerUid, user?.uid],
-  );
+  const dataOwnerUid = SHARED_INSTRUCTOR_DATA_OWNER;
   const [classes, setClasses] = useState<TrainingClass[]>(seedClasses);
   const [sessions, setSessions] = useState<ClassSession[]>(seedSessions);
   const [enrollments, setEnrollments] = useState<Enrollment[]>(seedEnrollments);
@@ -513,17 +513,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         syncFromPayload(localData, 'local');
       }
 
-      if (!dataOwnerUid) {
-        if (!localData) {
-          console.warn(
-            'Nenhum proprietário de dados configurado. Defina EXPO_PUBLIC_INSTRUCTOR_OWNER_UID para que alunos visualizem os dados do instrutor.',
-          );
-          syncFromPayload(null);
-        }
-        setHydrated(true);
-        return;
-      }
-
       if (!auth.currentUser) {
         if (!localData) {
           console.warn('Sessão não autenticada. Exibindo dados locais até que um usuário entre no aplicativo.');
@@ -570,7 +559,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [computeSignature, dataOwnerUid, initializing, loadLocalState, syncFromPayload]);
+  }, [computeSignature, dataOwnerUid, initializing, loadLocalState, syncFromPayload, user?.uid]);
 
   const reloadFromStorage = useCallback(async () => {
     const localData = await loadLocalState();
