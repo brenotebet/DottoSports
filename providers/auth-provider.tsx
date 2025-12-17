@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 
 import type { UserRole } from '@/constants/schema';
 import { resolveSeedDisplayName, resolveSeedRole } from '@/constants/seed-data';
-import { getAccountInfo, sendEmailVerification, signInWithEmail, signUpWithEmail } from '@/services/firebase-auth';
+import { getAccountInfo, sendEmailVerification, signInWithEmail, signOutUser, signUpWithEmail } from '@/services/firebase-auth';
 
 export type AuthenticatedUser = {
   email: string;
@@ -84,10 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const credentials = await signInWithEmail(email.trim(), password);
-    const accountInfo = await getAccountInfo(credentials.idToken);
+    const accountInfo = await getAccountInfo();
 
     if (!accountInfo.emailVerified) {
-      await sendEmailVerification(credentials.idToken);
+      await sendEmailVerification();
       throw new Error('Confirme seu e-mail antes de continuar. Enviamos um novo link de verificação.');
     }
 
@@ -98,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = async ({ email, password, ...profile }: SignupPayload) => {
     const credentials = await signUpWithEmail(email.trim(), password);
-    await sendEmailVerification(credentials.idToken);
+    await sendEmailVerification();
 
     // TODO: Persist profile data (profile) to your user collection once a backend is available
     void profile;
@@ -107,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     void persistUser(null);
+    void signOutUser();
   };
 
   useEffect(() => {

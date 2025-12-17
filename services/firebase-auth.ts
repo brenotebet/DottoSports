@@ -1,114 +1,95 @@
-import { firebaseConfig } from '@/constants/firebase';
+import {
+  createUserWithEmailAndPassword,
+  reload,
+  sendEmailVerification as firebaseSendEmailVerification,
+  signInWithEmailAndPassword,
+  type User,
+  signOut,
+} from 'firebase/auth';
 
-const buildFirebaseUrl = (path: string) => {
-  if (!firebaseConfig.apiKey) {
-    throw new Error('Missing Firebase API key. Set EXPO_PUBLIC_FIREBASE_API_KEY in your environment.');
-  }
-
-  return `https://identitytoolkit.googleapis.com/v1/${path}?key=${firebaseConfig.apiKey}`;
-};
+import { auth } from './firebase';
 
 const translateFirebaseError = (code?: string) => {
   if (!code) return 'Não foi possível concluir a solicitação. Tente novamente.';
 
-  const normalizedCode = code.toUpperCase();
-
-  if (normalizedCode.startsWith('WEAK_PASSWORD')) {
-    return 'Sua senha precisa ter pelo menos 6 caracteres.';
-  }
+  const normalizedCode = code.toLowerCase();
 
   const messages: Record<string, string> = {
-    EMAIL_EXISTS: 'Já existe uma conta com este e-mail. Entre ou escolha outro endereço.',
-    INVALID_EMAIL: 'Digite um e-mail válido para continuar.',
-    EMAIL_NOT_FOUND: 'Não encontramos uma conta com este e-mail.',
-    INVALID_PASSWORD: 'E-mail ou senha não conferem. Verifique e tente novamente.',
-    USER_DISABLED: 'Esta conta foi desativada. Entre em contato com o suporte.',
-    TOO_MANY_ATTEMPTS_TRY_LATER:
-      'Detectamos muitas tentativas. Aguarde alguns instantes antes de tentar novamente.',
+    'auth/email-already-in-use': 'Já existe uma conta com este e-mail. Entre ou escolha outro endereço.',
+    'auth/invalid-email': 'Digite um e-mail válido para continuar.',
+    'auth/user-not-found': 'Não encontramos uma conta com este e-mail.',
+    'auth/invalid-credential': 'E-mail ou senha não conferem. Verifique e tente novamente.',
+    'auth/invalid-password': 'E-mail ou senha não conferem. Verifique e tente novamente.',
+    'auth/user-disabled': 'Esta conta foi desativada. Entre em contato com o suporte.',
+    'auth/too-many-requests': 'Detectamos muitas tentativas. Aguarde alguns instantes antes de tentar novamente.',
+    'auth/weak-password': 'Sua senha precisa ter pelo menos 6 caracteres.',
   };
 
   return messages[normalizedCode] ?? 'Não foi possível concluir a solicitação. Tente novamente.';
 };
 
-const handleRequest = async <T>(path: string, body: Record<string, string | boolean>): Promise<T> => {
-  const response = await fetch(buildFirebaseUrl(path), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+const buildAuthenticatedResponse = async (user: User | null) => {
+  const idToken = await user?.getIdToken(true);
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    const message = translateFirebaseError(data?.error?.message);
-    throw new Error(message);
+  if (!user?.email || !idToken) {
+    throw new Error('Não foi possível concluir a solicitação. Tente novamente.');
   }
 
-  return data as T;
-};
-
-type FirebaseAuthResponse = {
-  email: string;
-  idToken: string;
-  refreshToken: string;
-  localId: string;
-};
-
-type AccountInfoResponse = {
-  users?: {
-    email: string;
-    emailVerified: boolean;
-  }[];
+  return {
+    email: user.email,
+    idToken,
+    refreshToken: user.refreshToken,
+    uid: user.uid,
+  };
 };
 
 export const signInWithEmail = async (email: string, password: string) => {
-  const response = await handleRequest<FirebaseAuthResponse>('accounts:signInWithPassword', {
-    email,
-    password,
-    returnSecureToken: true,
-  });
-
-  return {
-    email: response.email,
-    idToken: response.idToken,
-    refreshToken: response.refreshToken,
-    uid: response.localId,
-  };
+  try {
+    const credentials = await signInWithEmailAndPassword(auth, email, password);
+    await reload(credentials.user);
+    return buildAuthenticatedResponse(credentials.user);
+  } catch (error: unknown) {
+    const message = translateFirebaseError((error as { code?: string })?.code);
+    throw new Error(message);
+  }
 };
 
 export const signUpWithEmail = async (email: string, password: string) => {
-  const response = await handleRequest<FirebaseAuthResponse>('accounts:signUp', {
-    email,
-    password,
-    returnSecureToken: true,
-  });
+  try {
+    const credentials = await createUserWithEmailAndPassword(auth, email, password);
+    await firebaseSendEmailVerification(credentials.user);
+    return buildAuthenticatedResponse(credentials.user);
+  } catch (error: unknown) {
+    const message = translateFirebaseError((error as { code?: string })?.code);
+    throw new Error(message);
+  }
+};
+
+export const getAccountInfo = async () => {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    return { emailVerified: false, email: '' };
+  }
+
+  await reload(currentUser);
 
   return {
-    email: response.email,
-    idToken: response.idToken,
-    refreshToken: response.refreshToken,
-    uid: response.localId,
+    emailVerified: currentUser.emailVerified,
+    email: currentUser.email ?? '',
   };
 };
 
-export const getAccountInfo = async (idToken: string) => {
-  const response = await handleRequest<AccountInfoResponse>('accounts:lookup', {
-    idToken,
-  });
+export const sendEmailVerification = async () => {
+  const currentUser = auth.currentUser;
 
-  const user = response.users?.[0];
+  if (!currentUser) {
+    throw new Error('Nenhum usuário autenticado para enviar verificação.');
+  }
 
-  return {
-    emailVerified: user?.emailVerified ?? false,
-    email: user?.email ?? '',
-  };
+  await firebaseSendEmailVerification(currentUser);
 };
 
-export const sendEmailVerification = async (idToken: string) => {
-  await handleRequest('accounts:sendOobCode', {
-    requestType: 'VERIFY_EMAIL',
-    idToken,
-  });
+export const signOutUser = async () => {
+  await signOut(auth);
 };
