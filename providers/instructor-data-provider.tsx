@@ -307,6 +307,11 @@ const MAX_EVENT_ENTRIES = 50;
 
 export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const isInstructor = user?.role === 'INSTRUCTOR';
+  const dataOwnerUid = useMemo(
+    () => (isInstructor ? user?.uid : process.env.EXPO_PUBLIC_INSTRUCTOR_OWNER_UID ?? process.env.EXPO_PUBLIC_PRIMARY_INSTRUCTOR_UID ?? ''),
+    [isInstructor, user?.uid],
+  );
   const [classes, setClasses] = useState<TrainingClass[]>(seedClasses);
   const [sessions, setSessions] = useState<ClassSession[]>(seedSessions);
   const [enrollments, setEnrollments] = useState<Enrollment[]>(seedEnrollments);
@@ -436,7 +441,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     const hydrateFromFirestore = async () => {
-      if (!user) {
+      if (!dataOwnerUid) {
+        console.warn(
+          'Nenhum proprietário de dados configurado. Defina EXPO_PUBLIC_INSTRUCTOR_OWNER_UID para que alunos visualizem os dados do instrutor.',
+        );
         resetToSeedState();
         lastSyncedSignature.current = null;
         setHydrated(true);
@@ -446,7 +454,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       setHydrated(false);
 
       try {
-        const storedData = await fetchInstructorData(user.uid);
+        const storedData = await fetchInstructorData(dataOwnerUid);
 
         if (storedData) {
           applyPersistedData(storedData);
@@ -463,7 +471,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
 
       unsubscribe = subscribeToInstructorData(
-        user.uid,
+        dataOwnerUid,
         (payload) => {
           if (!payload) return;
 
@@ -485,13 +493,13 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [applyPersistedData, computeSignature, resetToSeedState, user]);
+  }, [applyPersistedData, computeSignature, dataOwnerUid, resetToSeedState]);
 
   const reloadFromStorage = useCallback(async () => {
-    if (!user) return;
+    if (!dataOwnerUid) return;
 
     try {
-      const storedData = await fetchInstructorData(user.uid);
+      const storedData = await fetchInstructorData(dataOwnerUid);
 
       if (storedData) {
         applyPersistedData(storedData);
@@ -500,17 +508,17 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.warn('Não foi possível recarregar os dados do instrutor', error);
     }
-  }, [applyPersistedData, computeSignature, user]);
+  }, [applyPersistedData, computeSignature, dataOwnerUid]);
 
   useEffect(() => {
-    if (!user || !hydrated) return;
+    if (!isInstructor || !dataOwnerUid || !hydrated) return;
 
     const payload = buildPersistedState();
     const signature = computeSignature(payload);
 
     if (lastSyncedSignature.current === signature) return;
 
-    void saveInstructorData(user.uid, payload)
+    void saveInstructorData(dataOwnerUid, payload)
       .then(() => {
         lastSyncedSignature.current = signature;
       })
@@ -524,6 +532,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     classes,
     computeSignature,
     creditReinstatements,
+    dataOwnerUid,
     enrollments,
     evaluations,
     events,
@@ -540,7 +549,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     studentPlans,
     sessionBookings,
     students,
-    user,
+    isInstructor,
   ]);
 
   const ensureStudentProfile = useCallback((email: string, displayName: string) => {
