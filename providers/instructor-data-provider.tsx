@@ -308,10 +308,11 @@ const MAX_EVENT_ENTRIES = 50;
 
 export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const { user, initializing } = useAuth();
-  const isInstructor = user?.role === 'INSTRUCTOR';
+  const envOwnerUid =
+    process.env.EXPO_PUBLIC_INSTRUCTOR_OWNER_UID ?? process.env.EXPO_PUBLIC_PRIMARY_INSTRUCTOR_UID;
   const dataOwnerUid = useMemo(
-    () => (isInstructor ? user?.uid : process.env.EXPO_PUBLIC_INSTRUCTOR_OWNER_UID ?? process.env.EXPO_PUBLIC_PRIMARY_INSTRUCTOR_UID ?? ''),
-    [isInstructor, user?.uid],
+    () => envOwnerUid ?? user?.uid ?? '',
+    [envOwnerUid, user?.uid],
   );
   const [classes, setClasses] = useState<TrainingClass[]>(seedClasses);
   const [sessions, setSessions] = useState<ClassSession[]>(seedSessions);
