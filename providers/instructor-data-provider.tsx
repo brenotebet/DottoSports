@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type {
@@ -337,6 +338,17 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<SystemEvent[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const lastSyncedSignature = useRef<string | null>(null);
+  const lastPersistedRemoteSignature = useRef<string | null>(null);
+  const lastPersistedLocalSignature = useRef<string | null>(null);
+  const storageOwnerKey = dataOwnerUid || 'local';
+
+  useEffect(() => {
+    setHydrated(false);
+    resetToSeedState();
+    lastSyncedSignature.current = null;
+    lastPersistedLocalSignature.current = null;
+    lastPersistedRemoteSignature.current = null;
+  }, [resetToSeedState, storageOwnerKey]);
 
   const buildPersistedState = useCallback((): InstructorSyncPayload => ({
     classes,
@@ -427,18 +439,53 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const syncFromPayload = useCallback(
-    (payload: InstructorSyncPayload | null) => {
+    (payload: InstructorSyncPayload | null, source?: 'local' | 'remote') => {
       if (!payload) {
         resetToSeedState();
         lastSyncedSignature.current = null;
+        lastPersistedLocalSignature.current = null;
+        lastPersistedRemoteSignature.current = null;
         return;
       }
 
       applyPersistedData(payload);
-      lastSyncedSignature.current = computeSignature(payload);
+      const signature = computeSignature(payload);
+      lastSyncedSignature.current = signature;
+
+      if (source === 'local') {
+        lastPersistedLocalSignature.current = signature;
+      }
+
+      if (source === 'remote') {
+        lastPersistedRemoteSignature.current = signature;
+      }
     },
     [applyPersistedData, computeSignature, resetToSeedState],
   );
+
+  const resolveStorageKey = useCallback(() => `@dottosports/instructor-state/${storageOwnerKey}`, [storageOwnerKey]);
+
+  const loadLocalState = useCallback(async (): Promise<InstructorSyncPayload | null> => {
+    try {
+      const raw = await AsyncStorage.getItem(resolveStorageKey());
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw) as InstructorSyncPayload;
+      return parsed ?? null;
+    } catch (error) {
+      console.warn('Não foi possível carregar dados locais do instrutor', error);
+      return null;
+    }
+  }, [resolveStorageKey]);
+
+  const persistLocalState = useCallback(async (payload: InstructorSyncPayload, signature: string) => {
+    try {
+      await AsyncStorage.setItem(resolveStorageKey(), JSON.stringify(payload));
+      lastPersistedLocalSignature.current = signature;
+    } catch (error) {
+      console.warn('Não foi possível salvar dados locais do instrutor', error);
+    }
+  }, [resolveStorageKey]);
 
   const logEvent = useCallback(
     (type: SystemEvent['type'], message: string, context?: Record<string, unknown>) => {
@@ -456,31 +503,40 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
 
-    const hydrateFromFirestore = async () => {
+    const hydrateFromSources = async () => {
       if (initializing) return;
 
+      setHydrated(false);
+
+      const localData = await loadLocalState();
+      if (!cancelled && localData) {
+        syncFromPayload(localData, 'local');
+      }
+
       if (!dataOwnerUid) {
-        console.warn(
-          'Nenhum proprietário de dados configurado. Defina EXPO_PUBLIC_INSTRUCTOR_OWNER_UID para que alunos visualizem os dados do instrutor.',
-        );
-        syncFromPayload(null);
+        if (!localData) {
+          console.warn(
+            'Nenhum proprietário de dados configurado. Defina EXPO_PUBLIC_INSTRUCTOR_OWNER_UID para que alunos visualizem os dados do instrutor.',
+          );
+          syncFromPayload(null);
+        }
         setHydrated(true);
         return;
       }
 
       if (!auth.currentUser) {
-        console.warn('Sessão não autenticada. Exibindo dados locais até que um usuário entre no aplicativo.');
-        syncFromPayload(null);
+        if (!localData) {
+          console.warn('Sessão não autenticada. Exibindo dados locais até que um usuário entre no aplicativo.');
+          syncFromPayload(null);
+        }
         setHydrated(true);
         return;
       }
 
-      setHydrated(false);
-
       try {
         const storedData = await fetchInstructorData(dataOwnerUid);
-        if (!cancelled) {
-          syncFromPayload(storedData);
+        if (!cancelled && storedData) {
+          syncFromPayload(storedData, 'remote');
         }
       } catch (error) {
         console.warn('Não foi possível restaurar os dados do instrutor', error);
@@ -500,7 +556,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           const signature = computeSignature(payload);
           if (lastSyncedSignature.current === signature) return;
 
-          syncFromPayload(payload);
+          syncFromPayload(payload, 'remote');
         },
         (error) => {
           console.warn('Não foi possível receber atualizações do instrutor', error);
@@ -508,41 +564,52 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       );
     };
 
-    void hydrateFromFirestore();
+    void hydrateFromSources();
 
     return () => {
       cancelled = true;
       unsubscribe?.();
     };
-  }, [computeSignature, dataOwnerUid, initializing, syncFromPayload]);
+  }, [computeSignature, dataOwnerUid, initializing, loadLocalState, syncFromPayload]);
 
   const reloadFromStorage = useCallback(async () => {
+    const localData = await loadLocalState();
+    if (localData) {
+      syncFromPayload(localData, 'local');
+    }
+
     if (!dataOwnerUid || !auth.currentUser) return;
 
     try {
       const storedData = await fetchInstructorData(dataOwnerUid);
 
       if (storedData) {
-        syncFromPayload(storedData);
+        syncFromPayload(storedData, 'remote');
+      } else {
+        syncFromPayload(null);
       }
     } catch (error) {
       console.warn('Não foi possível recarregar os dados do instrutor', error);
     }
-  }, [dataOwnerUid, syncFromPayload]);
+  }, [dataOwnerUid, loadLocalState, syncFromPayload]);
 
   const canPersistSharedState = Boolean(dataOwnerUid && auth.currentUser);
 
   useEffect(() => {
-    if (!hydrated || !canPersistSharedState) return;
+    if (!hydrated) return;
 
     const payload = buildPersistedState();
     const signature = computeSignature(payload);
 
-    if (lastSyncedSignature.current === signature) return;
+    if (lastPersistedLocalSignature.current !== signature) {
+      void persistLocalState(payload, signature);
+    }
+
+    if (!canPersistSharedState || lastPersistedRemoteSignature.current === signature) return;
 
     void saveInstructorData(dataOwnerUid, payload)
       .then(() => {
-        lastSyncedSignature.current = signature;
+        lastPersistedRemoteSignature.current = signature;
       })
       .catch((error) => {
         console.warn('Não foi possível salvar os dados do instrutor', error);
@@ -561,6 +628,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     events,
     goals,
     hydrated,
+    persistLocalState,
     invoices,
     paymentIntents,
     paymentSessions,
