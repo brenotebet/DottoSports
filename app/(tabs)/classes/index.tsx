@@ -1,6 +1,6 @@
 import { Link } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -12,12 +12,13 @@ import { useInstructorData } from '@/providers/instructor-data-provider';
 
 export default function ClassCatalogScreen() {
   const colorScheme = useColorScheme();
-  const { classes, sessions, getCapacityUsage } = useInstructorData();
+  const { classes, sessions, getCapacityUsage, reloadFromStorage } = useInstructorData();
   const insets = useSafeAreaInsets();
 
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [levelFilter, setLevelFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const categories = useMemo(
     () => ['all', ...new Set(classes.map((item) => item.category))],
@@ -61,12 +62,30 @@ export default function ClassCatalogScreen() {
     </Pressable>
   );
 
+  const handleReload = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await reloadFromStorage();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [reloadFromStorage]);
+
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top }]}
       edges={[ 'top', 'left', 'right', 'bottom']}>
       <TopBar title="Catálogo de aulas" />
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleReload}
+            tintColor={Colors[colorScheme ?? 'light'].tint}
+          />
+        }>
         <ThemedText type="title" style={styles.heading}>
           Encontre sua próxima aula
         </ThemedText>

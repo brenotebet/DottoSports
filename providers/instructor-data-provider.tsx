@@ -122,6 +122,7 @@ type InstructorDataContextValue = {
   }[];
   cardOnFile: CardOnFile;
   rosterByClass: Record<string, RosterEntry[]>;
+  reloadFromStorage: () => Promise<void>;
   getStudentAccountSnapshot: (studentId: string) => StudentAccountSnapshot;
   payOutstandingPayment: (paymentId: string) => { session: PaymentSession; intent: PaymentIntent };
   createClass: (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => void;
@@ -365,6 +366,28 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<SystemEvent[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
+  const applyPersistedData = useCallback((storedData: Partial<PersistedInstructorData>) => {
+    if (storedData.classes) setClasses(storedData.classes);
+    if (storedData.sessions) setSessions(storedData.sessions);
+    if (storedData.enrollments) setEnrollments(storedData.enrollments);
+    if (storedData.attendance) setAttendance(storedData.attendance);
+    if (storedData.payments) setPayments(storedData.payments);
+    if (storedData.invoices) setInvoices(storedData.invoices);
+    if (storedData.paymentIntents) setPaymentIntents(storedData.paymentIntents);
+    if (storedData.paymentSessions) setPaymentSessions(storedData.paymentSessions);
+    if (storedData.receipts) setReceipts(storedData.receipts);
+    if (storedData.settlements) setSettlements(storedData.settlements);
+    if (storedData.evaluations) setEvaluations(storedData.evaluations);
+    if (storedData.goals) setGoals(storedData.goals);
+    if (storedData.planOptions) setPlanOptions(ensurePlanCoverage(storedData.planOptions));
+    if (storedData.studentPlans) setStudentPlans(storedData.studentPlans);
+    if (storedData.sessionBookings) setSessionBookings(storedData.sessionBookings);
+    if (storedData.creditReinstatements) setCreditReinstatements(storedData.creditReinstatements);
+    if (storedData.students) setStudents(storedData.students);
+    if (storedData.cardOnFile) setCardOnFile(storedData.cardOnFile);
+    if (storedData.events) setEvents(storedData.events);
+  }, []);
+
   const logEvent = useCallback(
     (type: SystemEvent['type'], message: string, context?: Record<string, unknown>) => {
       setEvents((prev) =>
@@ -377,49 +400,39 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  useEffect(() => {
+  const hydrateFromStorage = useCallback(async () => {
     if (!instructorStateFile) {
       setHydrated(true);
       return;
     }
 
-    const restoreData = async () => {
-      try {
-        if (!instructorStateFile.exists) {
-          setHydrated(true);
-          return;
-        }
-
+    try {
+      if (instructorStateFile.exists) {
         const storedData = JSON.parse(await instructorStateFile.text()) as Partial<PersistedInstructorData>;
-
-        if (storedData.classes) setClasses(storedData.classes);
-        if (storedData.sessions) setSessions(storedData.sessions);
-        if (storedData.enrollments) setEnrollments(storedData.enrollments);
-        if (storedData.attendance) setAttendance(storedData.attendance);
-        if (storedData.payments) setPayments(storedData.payments);
-        if (storedData.invoices) setInvoices(storedData.invoices);
-        if (storedData.paymentIntents) setPaymentIntents(storedData.paymentIntents);
-        if (storedData.paymentSessions) setPaymentSessions(storedData.paymentSessions);
-        if (storedData.receipts) setReceipts(storedData.receipts);
-        if (storedData.settlements) setSettlements(storedData.settlements);
-        if (storedData.evaluations) setEvaluations(storedData.evaluations);
-        if (storedData.goals) setGoals(storedData.goals);
-        if (storedData.planOptions) setPlanOptions(ensurePlanCoverage(storedData.planOptions));
-        if (storedData.studentPlans) setStudentPlans(storedData.studentPlans);
-        if (storedData.sessionBookings) setSessionBookings(storedData.sessionBookings);
-        if (storedData.creditReinstatements) setCreditReinstatements(storedData.creditReinstatements);
-        if (storedData.students) setStudents(storedData.students);
-        if (storedData.cardOnFile) setCardOnFile(storedData.cardOnFile);
-        if (storedData.events) setEvents(storedData.events);
-      } catch (error) {
-        console.warn('Não foi possível restaurar os dados do instrutor', error);
-      } finally {
-        setHydrated(true);
+        applyPersistedData(storedData);
       }
-    };
+    } catch (error) {
+      console.warn('Não foi possível restaurar os dados do instrutor', error);
+    } finally {
+      setHydrated(true);
+    }
+  }, [applyPersistedData]);
 
-    void restoreData();
-  }, []);
+  useEffect(() => {
+    void hydrateFromStorage();
+  }, [hydrateFromStorage]);
+
+  const reloadFromStorage = useCallback(async () => {
+    if (!instructorStateFile) return;
+
+    try {
+      if (!instructorStateFile.exists) return;
+      const storedData = JSON.parse(await instructorStateFile.text()) as Partial<PersistedInstructorData>;
+      applyPersistedData(storedData);
+    } catch (error) {
+      console.warn('Não foi possível recarregar os dados do instrutor', error);
+    }
+  }, [applyPersistedData]);
 
   useEffect(() => {
     if (!instructorStateFile || !hydrated) return;
@@ -1525,6 +1538,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       outstandingBalances,
       cardOnFile,
       rosterByClass,
+      reloadFromStorage,
       getStudentAccountSnapshot,
       payOutstandingPayment,
       createClass,
@@ -1585,6 +1599,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       outstandingBalances,
       cardOnFile,
       rosterByClass,
+      reloadFromStorage,
       getStudentAccountSnapshot,
       payOutstandingPayment,
       ensureStudentProfile,
