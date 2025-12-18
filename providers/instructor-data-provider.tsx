@@ -303,6 +303,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<SystemEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, hasRole, initializing } = useAuth();
+  const [studentProfileId, setStudentProfileId] = useState<string | null>(null);
   const createCollectionId = useCallback((path: string) => doc(collection(db, path)).id, []);
 
   const normalizeFirestoreValue = useCallback((value: unknown): unknown => {
@@ -347,12 +348,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const syncCurrentUserRecord = useCallback(async () => {
     if (!user) return;
 
-    const ref = doc(db, 'users', user.uid);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const payload = mapSnapshot<UserAccount & { displayName?: string }>(snap.data(), snap.id);
-      setUsers([payload]);
-      return;
+    try {
+      const ref = doc(db, 'users', user.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const payload = mapSnapshot<UserAccount & { displayName?: string }>(snap.data(), snap.id);
+        setUsers([payload]);
+        return;
+      }
+    } catch (error) {
+      console.warn('Could not read current user document; continuing with auth payload', error);
     }
 
     const nowIso = new Date().toISOString();
@@ -370,17 +375,32 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   }, [mapSnapshot, user]);
 
   useEffect(() => {
-    if (!isInstructor) {
-      setPayments([]);
-      setInvoices([]);
-      setPaymentIntents([]);
-      setPaymentSessions([]);
-      setReceipts([]);
-      setSettlements([]);
-      setEvaluations([]);
-      setGoals([]);
+    if (!user || isInstructor) {
+      setStudentProfileId(null);
+      return;
     }
-  }, [isInstructor]);
+
+    let isMounted = true;
+
+    const resolveProfile = async () => {
+      try {
+        const profileQuery = query(collection(db, 'studentProfiles'), where('userId', '==', user.uid));
+        const snap = await getDocs(profileQuery);
+        if (!isMounted) return;
+        const profile = snap.docs[0];
+        setStudentProfileId(profile ? profile.id : null);
+      } catch (error) {
+        console.warn('Unable to resolve student profile for user; filtering queries to empty scope', error);
+        if (isMounted) setStudentProfileId(null);
+      }
+    };
+
+    void resolveProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isInstructor, user]);
 
   useEffect(() => {
     if (initializing || !user) return;
@@ -389,27 +409,37 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
     setLoading(true);
 
-    const subscribe = <T,>(path: string, setter: (items: T[]) => void) => {
-      const unsubscribe = onSnapshot(collection(db, path), (snap) => {
-        const payload = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
-        setter(payload);
-        setLoading(false);
-      });
+    const subscribe = <T,>(path: string, setter: (items: T[]) => void, constraints?: Parameters<typeof query>[1][]) => {
+      const baseRef = collection(db, path);
+      const ref = constraints && constraints.length > 0 ? query(baseRef, ...constraints) : baseRef;
+
+      const unsubscribe = onSnapshot(
+        ref,
+        (snap) => {
+          const payload = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
+          setter(payload);
+          setLoading(false);
+        },
+        (error) => {
+          console.warn(`Subscription to ${path} failed`, error);
+          setLoading(false);
+        },
+      );
       subscriptions.push(unsubscribe);
     };
 
     subscribe<TrainingClass>('classes', setClasses);
     subscribe<ClassSession>('sessions', setSessions);
-    subscribe<Enrollment>('enrollments', setEnrollments);
-    subscribe<Attendance>('attendance', setAttendance);
     subscribe<PlanOption>('planOptions', filterPlanOptions);
-    subscribe<StudentPlan>('studentPlans', setStudentPlans);
-    subscribe<SessionBooking>('sessionBookings', setSessionBookings);
-    subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements);
-    subscribe<StudentProfile>('studentProfiles', setStudents);
     subscribe<InstructorProfile>('instructorProfiles', setInstructorProfiles);
 
     if (isInstructor) {
+      subscribe<Enrollment>('enrollments', setEnrollments);
+      subscribe<Attendance>('attendance', setAttendance);
+      subscribe<StudentPlan>('studentPlans', setStudentPlans);
+      subscribe<SessionBooking>('sessionBookings', setSessionBookings);
+      subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements);
+      subscribe<StudentProfile>('studentProfiles', setStudents);
       subscribe<Payment>('payments', setPayments);
       subscribe<Invoice>('invoices', setInvoices);
       subscribe<PaymentIntent>('paymentIntents', setPaymentIntents);
@@ -420,19 +450,41 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       subscribe<Goal>('goals', setGoals);
       subscribe<UserAccount & { displayName?: string }>('users', setUsers);
     } else {
+      const studentScope = studentProfileId ?? '__none__';
+      subscribe<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]);
+      subscribe<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]);
+      subscribe<SessionBooking>('sessionBookings', setSessionBookings, [where('studentId', '==', studentScope)]);
+      subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
+        where('studentId', '==', studentScope),
+      ]);
+      subscribe<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]);
+      subscribe<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]);
+      subscribe<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]);
+      subscribe<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]);
       void syncCurrentUserRecord();
     }
 
     return () => subscriptions.forEach((unsubscribe) => unsubscribe());
-  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, syncCurrentUserRecord, user]);
+  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, studentProfileId, syncCurrentUserRecord, user]);
 
   const reloadFromStorage = useCallback(async () => {
     if (initializing || !user) return;
 
-    const fetchCollection = async <T,>(path: string, setter: (items: T[]) => void) => {
-      const snap = await getDocs(collection(db, path));
-      const payload = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
-      setter(payload);
+    const fetchCollection = async <T,>(
+      path: string,
+      setter: (items: T[]) => void,
+      constraints?: Parameters<typeof query>[1][],
+    ) => {
+      try {
+        const baseRef = collection(db, path);
+        const ref = constraints && constraints.length > 0 ? query(baseRef, ...constraints) : baseRef;
+        const snap = await getDocs(ref);
+        const payload = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
+        setter(payload);
+      } catch (error) {
+        console.warn(`Reload for ${path} skipped due to permission issue`, error);
+        setter([]);
+      }
     };
 
     setLoading(true);
@@ -440,33 +492,50 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     const baseCollections: Promise<void>[] = [
       fetchCollection<TrainingClass>('classes', setClasses),
       fetchCollection<ClassSession>('sessions', setSessions),
-      fetchCollection<Enrollment>('enrollments', setEnrollments),
-      fetchCollection<Attendance>('attendance', setAttendance),
       fetchCollection<PlanOption>('planOptions', filterPlanOptions),
-      fetchCollection<StudentPlan>('studentPlans', setStudentPlans),
-      fetchCollection<SessionBooking>('sessionBookings', setSessionBookings),
-      fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements),
-      fetchCollection<StudentProfile>('studentProfiles', setStudents),
       fetchCollection<InstructorProfile>('instructorProfiles', setInstructorProfiles),
     ];
 
-    const instructorCollections: Promise<void>[] = isInstructor
-      ? [
-          fetchCollection<Payment>('payments', setPayments),
-          fetchCollection<Invoice>('invoices', setInvoices),
-          fetchCollection<PaymentIntent>('paymentIntents', setPaymentIntents),
-          fetchCollection<PaymentSession>('paymentSessions', setPaymentSessions),
-          fetchCollection<Receipt>('receipts', setReceipts),
-          fetchCollection<Settlement>('settlements', setSettlements),
-          fetchCollection<Evaluation>('evaluations', setEvaluations),
-          fetchCollection<Goal>('goals', setGoals),
-          fetchCollection<UserAccount & { displayName?: string }>('users', setUsers),
-        ]
-      : [syncCurrentUserRecord()];
+    if (isInstructor) {
+      baseCollections.push(
+        fetchCollection<Enrollment>('enrollments', setEnrollments),
+        fetchCollection<Attendance>('attendance', setAttendance),
+        fetchCollection<StudentPlan>('studentPlans', setStudentPlans),
+        fetchCollection<SessionBooking>('sessionBookings', setSessionBookings),
+        fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements),
+        fetchCollection<StudentProfile>('studentProfiles', setStudents),
+        fetchCollection<Payment>('payments', setPayments),
+        fetchCollection<Invoice>('invoices', setInvoices),
+        fetchCollection<PaymentIntent>('paymentIntents', setPaymentIntents),
+        fetchCollection<PaymentSession>('paymentSessions', setPaymentSessions),
+        fetchCollection<Receipt>('receipts', setReceipts),
+        fetchCollection<Settlement>('settlements', setSettlements),
+        fetchCollection<Evaluation>('evaluations', setEvaluations),
+        fetchCollection<Goal>('goals', setGoals),
+        fetchCollection<UserAccount & { displayName?: string }>('users', setUsers),
+      );
+    } else {
+      const studentScope = studentProfileId ?? '__none__';
+      baseCollections.push(
+        fetchCollection<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]),
+        fetchCollection<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]),
+        fetchCollection<SessionBooking>('sessionBookings', setSessionBookings, [
+          where('studentId', '==', studentScope),
+        ]),
+        fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
+          where('studentId', '==', studentScope),
+        ]),
+        fetchCollection<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]),
+        fetchCollection<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]),
+        fetchCollection<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]),
+        fetchCollection<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]),
+      );
+      baseCollections.push(syncCurrentUserRecord());
+    }
 
-    await Promise.all([...baseCollections, ...instructorCollections]);
+    await Promise.all(baseCollections);
     setLoading(false);
-  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, syncCurrentUserRecord, user]);
+  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, studentProfileId, syncCurrentUserRecord, user]);
 
   useEffect(() => {
     void reloadFromStorage();
