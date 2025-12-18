@@ -38,7 +38,7 @@ export default function ClassPaymentsDetailScreen() {
   const findSessionForIntent = (intentId?: string) =>
     intentId ? paymentSessions.find((session) => session.intentId === intentId) : undefined;
 
-  const handleStartCheckout = (
+  const handleStartCheckout = async (
     paymentId: string,
     enrollmentId: string | undefined,
     amount: number,
@@ -48,7 +48,7 @@ export default function ClassPaymentsDetailScreen() {
     let intent = findIntentForPayment(paymentId);
 
     if (!intent && enrollmentId) {
-      intent = createPaymentIntentForEnrollment(
+      intent = await createPaymentIntentForEnrollment(
         enrollmentId,
         amount,
         method,
@@ -61,11 +61,11 @@ export default function ClassPaymentsDetailScreen() {
       return;
     }
 
-    const session = startPaymentSession(intent.id, intent);
+    const session = await startPaymentSession(intent.id, intent);
     Alert.alert('Sessão criada', `Checkout criado: ${session.checkoutUrl}`);
   };
 
-  const handleWebhookSimulation = (
+  const handleWebhookSimulation = async (
     paymentId: string,
     outcome: 'succeeded' | 'failed',
   ) => {
@@ -77,7 +77,7 @@ export default function ClassPaymentsDetailScreen() {
       return;
     }
 
-    processPaymentWebhook(
+    await processPaymentWebhook(
       session.id,
       outcome,
       outcome === 'failed' ? 'Falha simulada pelo instrutor' : undefined,

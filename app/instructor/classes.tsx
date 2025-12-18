@@ -6,7 +6,6 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { TopBar } from '@/components/top-bar';
 import { TrainingClass } from '@/constants/schema';
-import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
@@ -86,13 +85,14 @@ const defaultClassForm: ClassFormState = {
   scheduleStartDate: defaultDateStart,
   scheduleEndDate: defaultDateEnd,
   tags: 'metcon, iniciantes',
-  instructorId: instructorProfiles[0]?.id ?? 'instructor-1',
+  instructorId: '',
 };
 
-const createDefaultClassForm = (): ClassFormState => ({
+const createDefaultClassForm = (instructorId = ''): ClassFormState => ({
   ...defaultClassForm,
   scheduleStartDate: formatDateInput(new Date()),
   scheduleEndDate: formatDateInput(addDays(new Date(), 45)),
+  instructorId,
 });
 
 type DropdownFieldProps = {
@@ -132,16 +132,6 @@ function DropdownField({ label, value, options, onSelect }: DropdownFieldProps) 
     </View>
   );
 }
-
-const coachOptions = seedAccounts
-  .filter((account) => account.role === 'INSTRUCTOR')
-  .map((account) => {
-    const instructorProfile = instructorProfiles.find((profile) => profile.userId === account.id);
-    return {
-      id: instructorProfile?.id ?? account.id,
-      label: instructorProfile?.fullName ?? account.displayName ?? account.email,
-    };
-  });
 
 const isSameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -264,10 +254,19 @@ function DateRangeCalendar({ startDate, endDate, onChange }: DateRangeCalendarPr
 }
 
 export default function InstructorClassesScreen() {
-  const { classes, createClass, updateClass, deleteClass } = useInstructorData();
+  const { classes, instructorProfiles, createClass, updateClass, deleteClass } = useInstructorData();
   const insets = useSafeAreaInsets();
 
-  const [classForm, setClassForm] = useState<ClassFormState>(() => createDefaultClassForm());
+  const coachOptions = useMemo(
+    () =>
+      instructorProfiles.map((profile) => ({
+        id: profile.id,
+        label: profile.fullName,
+      })),
+    [instructorProfiles],
+  );
+
+  const [classForm, setClassForm] = useState<ClassFormState>(() => createDefaultClassForm(coachOptions[0]?.id ?? ''));
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [classErrors, setClassErrors] = useState<Partial<Record<keyof ClassFormState, string>>>({});
   const timeOptions = useMemo(() => generateTimeSlots(), []);
@@ -320,9 +319,15 @@ export default function InstructorClassesScreen() {
     }
   }, [availableEndTimes, classForm.scheduleEnd]);
 
+  useEffect(() => {
+    if (!classForm.instructorId && coachOptions[0]?.id) {
+      setClassForm((prev) => ({ ...prev, instructorId: coachOptions[0].id }));
+    }
+  }, [classForm.instructorId, coachOptions]);
+
   const coachNameForId = useCallback(
     (id?: string) => coachOptions.find((coach) => coach.id === id)?.label ?? 'Coach',
-    [],
+    [coachOptions],
   );
 
   const confirmAction = (title: string, message: string, onConfirm: () => void) => {
@@ -413,7 +418,7 @@ export default function InstructorClassesScreen() {
         Alert.alert('Nova aula criada', 'A aula foi cadastrada com sucesso.');
       }
 
-      setClassForm(createDefaultClassForm());
+      setClassForm(createDefaultClassForm(coachOptions[0]?.id ?? ''));
       setClassErrors({});
       setEditingClassId(null);
     });
@@ -436,7 +441,7 @@ export default function InstructorClassesScreen() {
       scheduleStartDate: target.schedule[0]?.startDate ?? defaultDateStart,
       scheduleEndDate: target.schedule[0]?.endDate ?? defaultDateEnd,
       tags: target.tags.join(', '),
-      instructorId: target.instructorId ?? instructorProfiles[0]?.id ?? 'instructor-1',
+      instructorId: target.instructorId ?? coachOptions[0]?.id ?? '',
     });
     setClassErrors({});
     setEditingClassId(id);

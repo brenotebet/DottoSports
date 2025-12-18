@@ -1,5 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { File, Paths } from 'expo-file-system';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+  type DocumentData,
+  type Unsubscribe,
+} from 'firebase/firestore';
 
 import type {
   Attendance,
@@ -13,6 +28,8 @@ import type {
   PaymentSession,
   Receipt,
   Settlement,
+  InstructorProfile,
+  UserAccount,
   StudentProfile,
   TrainingClass,
   PlanOption,
@@ -20,26 +37,7 @@ import type {
   SessionBooking,
   CreditReinstatement,
 } from '@/constants/schema';
-import {
-  attendance as seedAttendance,
-  classes as seedClasses,
-  enrollments as seedEnrollments,
-  evaluations as seedEvaluations,
-  goals as seedGoals,
-  payments as seedPayments,
-  invoices as seedInvoices,
-  paymentIntents as seedPaymentIntents,
-  paymentSessions as seedPaymentSessions,
-  receipts as seedReceipts,
-  settlements as seedSettlements,
-  sessions as seedSessions,
-  planOptions as seedPlanOptions,
-  studentPlans as seedStudentPlans,
-  sessionBookings as seedSessionBookings,
-  creditReinstatements as seedCreditReinstatements,
-  studentProfiles,
-  seedAccounts,
-} from '@/constants/seed-data';
+import { db } from '@/services/firebase';
 
 export type RosterEntry = {
   enrollment: Enrollment;
@@ -111,6 +109,7 @@ type InstructorDataContextValue = {
   creditReinstatements: CreditReinstatement[];
   evaluations: Evaluation[];
   goals: Goal[];
+  instructorProfiles: InstructorProfile[];
   events: SystemEvent[];
   analytics: AnalyticsSnapshot;
   outstandingBalances: {
@@ -122,67 +121,68 @@ type InstructorDataContextValue = {
   }[];
   cardOnFile: CardOnFile;
   rosterByClass: Record<string, RosterEntry[]>;
+  loading: boolean;
   reloadFromStorage: () => Promise<void>;
   getStudentAccountSnapshot: (studentId: string) => StudentAccountSnapshot;
-  payOutstandingPayment: (paymentId: string) => { session: PaymentSession; intent: PaymentIntent };
-  createClass: (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  updateClass: (id: string, payload: Partial<TrainingClass>) => void;
-  deleteClass: (id: string) => void;
-  createSession: (payload: Omit<ClassSession, 'id'>) => void;
-  updateSession: (id: string, payload: Partial<ClassSession>) => void;
-  deleteSession: (id: string) => void;
+  payOutstandingPayment: (paymentId: string) => Promise<{ session: PaymentSession; intent: PaymentIntent }>;
+  createClass: (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateClass: (id: string, payload: Partial<TrainingClass>) => Promise<void>;
+  deleteClass: (id: string) => Promise<void>;
+  createSession: (payload: Omit<ClassSession, 'id'>) => Promise<void>;
+  updateSession: (id: string, payload: Partial<ClassSession>) => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
   ensureStudentProfile: (email: string, displayName: string) => StudentProfile;
   getEnrollmentForStudent: (studentId: string, classId: string) => Enrollment | undefined;
   enrollStudentInClass: (
     studentId: string,
     classId: string,
-  ) => { enrollment: Enrollment; isWaitlist: boolean; alreadyEnrolled: boolean };
+  ) => Promise<{ enrollment: Enrollment; isWaitlist: boolean; alreadyEnrolled: boolean }>;
   getCapacityUsage: (classId: string) => { active: number; capacity: number; available: number };
   toggleAttendance: (
     sessionId: string,
     enrollmentId: string,
     status: Attendance['status'],
-  ) => void;
+  ) => Promise<void>;
   getActivePlanForStudent: (studentId: string) => StudentPlan | undefined;
-  selectPlanForStudent: (studentId: string, planOptionId: string, billing: StudentPlan['billing']) => StudentPlan;
+  selectPlanForStudent: (studentId: string, planOptionId: string, billing: StudentPlan['billing']) => Promise<StudentPlan>;
   getWeeklyUsageForStudent: (
     studentId: string,
     referenceDate?: Date,
   ) => { used: number; limit: number; remaining: number; weekStart: string };
   isSessionBooked: (sessionId: string, studentId: string) => boolean;
-  bookSessionForStudent: (sessionId: string, studentId: string) => SessionBooking;
-  reinstateClassForWeek: (studentId: string, weekStart: string, amount?: number, notes?: string) => CreditReinstatement;
-  recordCheckIn: (sessionId: string, enrollmentId: string, method: 'qr' | 'manual') => Attendance;
-  chargeStoredCard: (studentId: string, amount: number, description: string) => Payment;
+  bookSessionForStudent: (sessionId: string, studentId: string) => Promise<SessionBooking>;
+  reinstateClassForWeek: (studentId: string, weekStart: string, amount?: number, notes?: string) => Promise<CreditReinstatement>;
+  recordCheckIn: (sessionId: string, enrollmentId: string, method: 'qr' | 'manual') => Promise<Attendance>;
+  chargeStoredCard: (studentId: string, amount: number, description: string) => Promise<Payment>;
   createOneTimePayment: (
     studentId: string,
     amount: number,
     method: Payment['method'],
     description: string,
-  ) => Payment;
+  ) => Promise<Payment>;
   updateCardOnFile: (payload: Partial<CardOnFile>) => void;
-  updateEnrollmentStatus: (enrollmentId: string, status: Enrollment['status']) => void;
+  updateEnrollmentStatus: (enrollmentId: string, status: Enrollment['status']) => Promise<void>;
   createPaymentIntentForEnrollment: (
     enrollmentId: string,
     amount: number,
     method: Payment['method'],
     description: string,
-  ) => PaymentIntent;
-  startPaymentSession: (intentId: string, fallbackIntent?: PaymentIntent) => PaymentSession;
+  ) => Promise<PaymentIntent>;
+  startPaymentSession: (intentId: string, fallbackIntent?: PaymentIntent) => Promise<PaymentSession>;
   processPaymentWebhook: (
     sessionId: string,
     result: 'succeeded' | 'failed',
     failureReason?: string,
     sessionOverride?: PaymentSession,
     intentOverride?: PaymentIntent,
-  ) => void;
-  cancelEnrollment: (enrollmentId: string) => void;
-  createEvaluation: (payload: Omit<Evaluation, 'id'>) => void;
-  updateEvaluation: (id: string, payload: Partial<Evaluation>) => void;
-  deleteEvaluation: (id: string) => void;
-  createGoal: (payload: Omit<Goal, 'id'>) => void;
-  updateGoal: (id: string, payload: Partial<Goal>) => void;
-  deleteGoal: (id: string) => void;
+  ) => Promise<void>;
+  cancelEnrollment: (enrollmentId: string) => Promise<void>;
+  createEvaluation: (payload: Omit<Evaluation, 'id'>) => Promise<void>;
+  updateEvaluation: (id: string, payload: Partial<Evaluation>) => Promise<void>;
+  deleteEvaluation: (id: string) => Promise<void>;
+  createGoal: (payload: Omit<Goal, 'id'>) => Promise<void>;
+  updateGoal: (id: string, payload: Partial<Goal>) => Promise<void>;
+  deleteGoal: (id: string) => Promise<void>;
   getStudentProfileForEmail: (email: string, displayName?: string) => StudentProfile;
   getStudentEvaluations: (studentId: string) => Evaluation[];
 };
@@ -190,28 +190,7 @@ type InstructorDataContextValue = {
 const InstructorDataContext = createContext<InstructorDataContextValue | undefined>(undefined);
 
 const generateId = (prefix: string) => `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
-const findAccountByEmail = (email: string) =>
-  seedAccounts.find((account) => account.email.toLowerCase() === email.toLowerCase());
 const ALLOWED_WEEKLY_CLASSES = [2, 4, 6];
-
-const sanitizePlanOptions = (options: PlanOption[]) =>
-  options.filter((option) => ALLOWED_WEEKLY_CLASSES.includes(option.weeklyClasses));
-
-const ensurePlanCoverage = (options: PlanOption[]) => {
-  const sanitizedSeed = sanitizePlanOptions(seedPlanOptions);
-  const sanitizedStored = sanitizePlanOptions(options);
-  const matrix = new Map<string, PlanOption>();
-
-  sanitizedSeed.forEach((option) =>
-    matrix.set(`${option.weeklyClasses}-${option.durationMonths}`, option),
-  );
-
-  sanitizedStored.forEach((option) =>
-    matrix.set(`${option.weeklyClasses}-${option.durationMonths}`, option),
-  );
-
-  return Array.from(matrix.values());
-};
 
 const resolvePaymentStatus = (
   payments: Payment[],
@@ -299,94 +278,137 @@ const defaultCard: CardOnFile = {
 
 const MAX_EVENT_ENTRIES = 50;
 
-type PersistedInstructorData = {
-  classes: TrainingClass[];
-  sessions: ClassSession[];
-  enrollments: Enrollment[];
-  attendance: Attendance[];
-  payments: Payment[];
-  invoices: Invoice[];
-  paymentIntents: PaymentIntent[];
-  paymentSessions: PaymentSession[];
-  receipts: Receipt[];
-  settlements: Settlement[];
-  students: StudentProfile[];
-  evaluations: Evaluation[];
-  goals: Goal[];
-  planOptions: PlanOption[];
-  studentPlans: StudentPlan[];
-  sessionBookings: SessionBooking[];
-  creditReinstatements: CreditReinstatement[];
-  cardOnFile: CardOnFile;
-  events: SystemEvent[];
-};
-
-const instructorStateFile = (() => {
-  const candidates = [
-    () => Paths.document,
-    () => Paths.cache,
-  ];
-
-  for (const getDirectory of candidates) {
-    try {
-      const directory = getDirectory();
-
-      if (directory?.uri) {
-        return new File(directory, 'instructor-data.json');
-      }
-    } catch (error) {
-      console.warn('Não foi possível resolver um diretório para os dados do instrutor', error);
-    }
-  }
-
-  return null;
-})();
-
 export function InstructorDataProvider({ children }: { children: ReactNode }) {
-  const [classes, setClasses] = useState<TrainingClass[]>(seedClasses);
-  const [sessions, setSessions] = useState<ClassSession[]>(seedSessions);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>(seedEnrollments);
-  const [attendance, setAttendance] = useState<Attendance[]>(seedAttendance);
-  const [payments, setPayments] = useState<Payment[]>(seedPayments);
-  const [invoices, setInvoices] = useState<Invoice[]>(seedInvoices);
-  const [paymentIntents, setPaymentIntents] = useState<PaymentIntent[]>(seedPaymentIntents);
-  const [paymentSessions, setPaymentSessions] = useState<PaymentSession[]>(seedPaymentSessions);
-  const [receipts, setReceipts] = useState<Receipt[]>(seedReceipts);
-  const [settlements, setSettlements] = useState<Settlement[]>(seedSettlements);
-  const [evaluations, setEvaluations] = useState<Evaluation[]>(seedEvaluations);
-  const [goals, setGoals] = useState<Goal[]>(seedGoals);
-  const [planOptions, setPlanOptions] = useState<PlanOption[]>(
-    ensurePlanCoverage(seedPlanOptions),
-  );
-  const [studentPlans, setStudentPlans] = useState<StudentPlan[]>(seedStudentPlans);
-  const [sessionBookings, setSessionBookings] = useState<SessionBooking[]>(seedSessionBookings);
-  const [creditReinstatements, setCreditReinstatements] = useState<CreditReinstatement[]>(seedCreditReinstatements);
-  const [students, setStudents] = useState<StudentProfile[]>(studentProfiles);
+  const [classes, setClasses] = useState<TrainingClass[]>([]);
+  const [sessions, setSessions] = useState<ClassSession[]>([]);
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [paymentIntents, setPaymentIntents] = useState<PaymentIntent[]>([]);
+  const [paymentSessions, setPaymentSessions] = useState<PaymentSession[]>([]);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [settlements, setSettlements] = useState<Settlement[]>([]);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
+  const [studentPlans, setStudentPlans] = useState<StudentPlan[]>([]);
+  const [sessionBookings, setSessionBookings] = useState<SessionBooking[]>([]);
+  const [creditReinstatements, setCreditReinstatements] = useState<CreditReinstatement[]>([]);
+  const [students, setStudents] = useState<StudentProfile[]>([]);
+  const [instructorProfiles, setInstructorProfiles] = useState<InstructorProfile[]>([]);
+  const [users, setUsers] = useState<Array<UserAccount & { displayName?: string }>>([]);
   const [cardOnFile, setCardOnFile] = useState<CardOnFile>(defaultCard);
   const [events, setEvents] = useState<SystemEvent[]>([]);
-  const [hydrated, setHydrated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const createCollectionId = useCallback((path: string) => doc(collection(db, path)).id, []);
 
-  const applyPersistedData = useCallback((storedData: Partial<PersistedInstructorData>) => {
-    if (storedData.classes) setClasses(storedData.classes);
-    if (storedData.sessions) setSessions(storedData.sessions);
-    if (storedData.enrollments) setEnrollments(storedData.enrollments);
-    if (storedData.attendance) setAttendance(storedData.attendance);
-    if (storedData.payments) setPayments(storedData.payments);
-    if (storedData.invoices) setInvoices(storedData.invoices);
-    if (storedData.paymentIntents) setPaymentIntents(storedData.paymentIntents);
-    if (storedData.paymentSessions) setPaymentSessions(storedData.paymentSessions);
-    if (storedData.receipts) setReceipts(storedData.receipts);
-    if (storedData.settlements) setSettlements(storedData.settlements);
-    if (storedData.evaluations) setEvaluations(storedData.evaluations);
-    if (storedData.goals) setGoals(storedData.goals);
-    if (storedData.planOptions) setPlanOptions(ensurePlanCoverage(storedData.planOptions));
-    if (storedData.studentPlans) setStudentPlans(storedData.studentPlans);
-    if (storedData.sessionBookings) setSessionBookings(storedData.sessionBookings);
-    if (storedData.creditReinstatements) setCreditReinstatements(storedData.creditReinstatements);
-    if (storedData.students) setStudents(storedData.students);
-    if (storedData.cardOnFile) setCardOnFile(storedData.cardOnFile);
-    if (storedData.events) setEvents(storedData.events);
+  const normalizeFirestoreValue = useCallback((value: unknown): unknown => {
+    if (!value) return value;
+    if (typeof value === 'object' && 'toDate' in (value as Record<string, unknown>)) {
+      try {
+        const timestamp = (value as { toDate: () => Date }).toDate();
+        return timestamp.toISOString();
+      } catch {
+        return value;
+      }
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => normalizeFirestoreValue(item));
+    }
+
+    if (typeof value === 'object') {
+      return Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>((acc, [key, entry]) => {
+        acc[key] = normalizeFirestoreValue(entry);
+        return acc;
+      }, {});
+    }
+
+    return value;
   }, []);
+
+  const mapSnapshot = useCallback(
+    <T,>(snapshot: DocumentData, id: string): T => {
+      const normalized = normalizeFirestoreValue(snapshot) as Record<string, unknown>;
+      return { id, ...normalized } as T;
+    },
+    [normalizeFirestoreValue],
+  );
+
+  useEffect(() => {
+    const subscriptions: Unsubscribe[] = [];
+
+    const subscribe = <T,>(path: string, setter: (items: T[]) => void) => {
+      const unsubscribe = onSnapshot(collection(db, path), (snap) => {
+        const payload = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
+        setter(payload);
+        setLoading(false);
+      });
+      subscriptions.push(unsubscribe);
+    };
+
+    subscribe<TrainingClass>('classes', setClasses);
+    subscribe<ClassSession>('sessions', setSessions);
+    subscribe<Enrollment>('enrollments', setEnrollments);
+    subscribe<Attendance>('attendance', setAttendance);
+    subscribe<Payment>('payments', setPayments);
+    subscribe<Invoice>('invoices', setInvoices);
+    subscribe<PaymentIntent>('paymentIntents', setPaymentIntents);
+    subscribe<PaymentSession>('paymentSessions', setPaymentSessions);
+    subscribe<Receipt>('receipts', setReceipts);
+    subscribe<Settlement>('settlements', setSettlements);
+    subscribe<Evaluation>('evaluations', setEvaluations);
+    subscribe<Goal>('goals', setGoals);
+    subscribe<PlanOption>('planOptions', (items) =>
+      setPlanOptions(items.filter((option) => ALLOWED_WEEKLY_CLASSES.includes(option.weeklyClasses))),
+    );
+    subscribe<StudentPlan>('studentPlans', setStudentPlans);
+    subscribe<SessionBooking>('sessionBookings', setSessionBookings);
+    subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements);
+    subscribe<StudentProfile>('studentProfiles', setStudents);
+    subscribe<InstructorProfile>('instructorProfiles', setInstructorProfiles);
+    subscribe<UserAccount & { displayName?: string }>('users', setUsers);
+
+    return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+  }, [mapSnapshot]);
+
+  const reloadFromStorage = useCallback(async () => {
+    const fetchCollection = async <T,>(path: string, setter: (items: T[]) => void) => {
+      const snap = await getDocs(collection(db, path));
+      const payload = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
+      setter(payload);
+    };
+
+    await Promise.all([
+      fetchCollection<TrainingClass>('classes', setClasses),
+      fetchCollection<ClassSession>('sessions', setSessions),
+      fetchCollection<Enrollment>('enrollments', setEnrollments),
+      fetchCollection<Attendance>('attendance', setAttendance),
+      fetchCollection<Payment>('payments', setPayments),
+      fetchCollection<Invoice>('invoices', setInvoices),
+      fetchCollection<PaymentIntent>('paymentIntents', setPaymentIntents),
+      fetchCollection<PaymentSession>('paymentSessions', setPaymentSessions),
+      fetchCollection<Receipt>('receipts', setReceipts),
+      fetchCollection<Settlement>('settlements', setSettlements),
+      fetchCollection<Evaluation>('evaluations', setEvaluations),
+      fetchCollection<Goal>('goals', setGoals),
+      fetchCollection<PlanOption>('planOptions', (items) =>
+        setPlanOptions(items.filter((option) => ALLOWED_WEEKLY_CLASSES.includes(option.weeklyClasses))),
+      ),
+      fetchCollection<StudentPlan>('studentPlans', setStudentPlans),
+      fetchCollection<SessionBooking>('sessionBookings', setSessionBookings),
+      fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements),
+      fetchCollection<StudentProfile>('studentProfiles', setStudents),
+      fetchCollection<InstructorProfile>('instructorProfiles', setInstructorProfiles),
+      fetchCollection<UserAccount & { displayName?: string }>('users', setUsers),
+    ]);
+    setLoading(false);
+  }, [mapSnapshot]);
+
+  useEffect(() => {
+    void reloadFromStorage();
+  }, [reloadFromStorage]);
 
   const logEvent = useCallback(
     (type: SystemEvent['type'], message: string, context?: Record<string, unknown>) => {
@@ -400,103 +422,38 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const hydrateFromStorage = useCallback(async () => {
-    if (!instructorStateFile) {
-      setHydrated(true);
-      return;
-    }
+  const ensureUserAccount = useCallback(
+    (email: string, displayName: string) => {
+      const existing = users.find((account) => account.email.toLowerCase() === email.toLowerCase());
+      if (existing) return existing;
 
-    try {
-      if (instructorStateFile.exists) {
-        const storedData = JSON.parse(await instructorStateFile.text()) as Partial<PersistedInstructorData>;
-        applyPersistedData(storedData);
-      }
-    } catch (error) {
-      console.warn('Não foi possível restaurar os dados do instrutor', error);
-    } finally {
-      setHydrated(true);
-    }
-  }, [applyPersistedData]);
-
-  useEffect(() => {
-    void hydrateFromStorage();
-  }, [hydrateFromStorage]);
-
-  const reloadFromStorage = useCallback(async () => {
-    if (!instructorStateFile) return;
-
-    try {
-      if (!instructorStateFile.exists) return;
-      const storedData = JSON.parse(await instructorStateFile.text()) as Partial<PersistedInstructorData>;
-      applyPersistedData(storedData);
-    } catch (error) {
-      console.warn('Não foi possível recarregar os dados do instrutor', error);
-    }
-  }, [applyPersistedData]);
-
-  useEffect(() => {
-    if (!instructorStateFile || !hydrated) return;
-
-    try {
-      const payload: PersistedInstructorData = {
-        classes,
-        sessions,
-        enrollments,
-        attendance,
-        payments,
-        invoices,
-        paymentIntents,
-        paymentSessions,
-        receipts,
-        settlements,
-        evaluations,
-        goals,
-        planOptions,
-        studentPlans,
-        sessionBookings,
-        creditReinstatements,
-        students,
-        cardOnFile,
-        events,
+      const now = new Date().toISOString();
+      const id = createCollectionId('users');
+      const account: UserAccount & { displayName?: string } = {
+        id,
+        email,
+        role: 'STUDENT',
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+        displayName,
       };
 
-      instructorStateFile.write(JSON.stringify(payload));
-    } catch (error) {
-      console.warn('Não foi possível salvar os dados do instrutor', error);
-    }
-  }, [
-    attendance,
-    cardOnFile,
-    classes,
-    enrollments,
-    hydrated,
-    invoices,
-    payments,
-    paymentIntents,
-    paymentSessions,
-    receipts,
-    evaluations,
-    goals,
-    sessions,
-    settlements,
-    students,
-    planOptions,
-    studentPlans,
-    sessionBookings,
-    creditReinstatements,
-  ]);
+      void setDoc(doc(db, 'users', id), account, { merge: true });
+      return account;
+    },
+    [createCollectionId, users],
+  );
 
-  const ensureStudentProfile = useCallback((email: string, displayName: string) => {
-    const existingAccount = findAccountByEmail(email);
-    const resolvedUserId = existingAccount?.id ?? `user-${email.toLowerCase()}`;
-    let resolvedProfile: StudentProfile | undefined;
+  const ensureStudentProfile = useCallback(
+    (email: string, displayName: string) => {
+      const resolvedAccount = ensureUserAccount(email, displayName);
+      const resolvedUserId = resolvedAccount.id;
+      const existingProfile = students.find((profile) => profile.userId === resolvedUserId);
+      if (existingProfile) return existingProfile;
 
-    setStudents((prev) => {
-      resolvedProfile = prev.find((profile) => profile.userId === resolvedUserId);
-      if (resolvedProfile) return prev;
-
-      const newProfile: StudentProfile = {
-        id: generateId('student'),
+      const profile: StudentProfile = {
+        id: createCollectionId('studentProfiles'),
         userId: resolvedUserId,
         fullName: displayName || email,
         phone: '+55 11 99999-0000',
@@ -506,27 +463,22 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         emergencyContact: { name: 'Contato padrão', phone: '+55 11 98888-0000' },
       };
 
-      resolvedProfile = newProfile;
-      return [...prev, newProfile];
-    });
+      void setDoc(doc(db, 'studentProfiles', profile.id), profile);
+      return profile;
+    },
+    [createCollectionId, ensureUserAccount, students],
+  );
 
-    if (!resolvedProfile) {
-      const fallbackProfile: StudentProfile = {
-        id: generateId('student'),
-        userId: resolvedUserId,
-        fullName: displayName || email,
-        phone: '+55 11 99999-0000',
-        birthDate: '1995-01-01',
-        experienceLevel: 'beginner',
-        goals: ['Entrar em forma e manter consistência'],
-        emergencyContact: { name: 'Contato padrão', phone: '+55 11 98888-0000' },
-      };
+  const saveDocument = useCallback(async <T extends { id: string }>(path: string, payload: T) => {
+    await setDoc(doc(db, path, payload.id), payload);
+  }, []);
 
-      resolvedProfile = fallbackProfile;
-      setStudents((prev) => [...prev, fallbackProfile]);
+  const chunkArray = useCallback(<T,>(items: T[], size = 10) => {
+    const chunks: T[][] = [];
+    for (let index = 0; index < items.length; index += size) {
+      chunks.push(items.slice(index, index + size));
     }
-
-    return resolvedProfile;
+    return chunks;
   }, []);
 
   const getStudentProfileForEmail = useCallback(
@@ -543,7 +495,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   );
 
   const upsertPlanPayment = useCallback(
-    (studentId: string, option: PlanOption, billing: StudentPlan['billing']) => {
+    async (studentId: string, option: PlanOption, billing: StudentPlan['billing']) => {
       const amount = billing === 'recurring' ? option.priceMonthly : option.priceUpfront;
       const issueDate = new Date();
       const dueDate = new Date();
@@ -557,105 +509,64 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         (enrollment) => enrollment.studentId === studentId && enrollment.status === 'active',
       )?.id;
 
-      let targetedPaymentId: string | undefined;
-      let targetedEnrollmentId: string | undefined = existingEnrollmentId;
+      const existingPayment = payments.find((payment) => payment.studentId === studentId && payment.status !== 'paid');
+      const paymentId = existingPayment?.id ?? createCollectionId('payments');
+      const enrollmentId = existingPayment?.enrollmentId ?? existingEnrollmentId ?? `${studentId}-unassigned-plan`;
 
-      setPayments((prev) => {
-        let updated = false;
-        const next = prev.map((payment) => {
-          if (payment.studentId === studentId && payment.status !== 'paid' && !updated) {
-            targetedPaymentId = payment.id;
-            targetedEnrollmentId = payment.enrollmentId ?? targetedEnrollmentId;
-            updated = true;
-            return {
-              ...payment,
-              amount,
-              dueDate: dueDateFormatted,
-              description,
-              status: 'pending',
-            } satisfies Payment;
+      const payment: Payment = {
+        id: paymentId,
+        studentId,
+        amount,
+        currency: 'BRL',
+        method: 'pix',
+        status: 'pending',
+        dueDate: dueDateFormatted,
+        description,
+        enrollmentId,
+      };
+
+      await saveDocument('payments', payment);
+
+      const existingInvoice = invoices.find((invoice) => invoice.paymentId === paymentId);
+      const invoice: Invoice = existingInvoice
+        ? {
+            ...existingInvoice,
+            issueDate: issueDateFormatted,
+            total: amount,
+            status: 'open',
+            reference: existingInvoice.reference ?? `${issueDate.getMonth() + 1}/${issueDate.getFullYear()}`,
+            enrollmentId,
           }
-
-          return payment;
-        });
-
-        if (!updated) {
-          const payment: Payment = {
-            id: generateId('payment'),
-            studentId,
-            amount,
+        : {
+            id: createCollectionId('invoices'),
+            paymentId,
+            enrollmentId,
+            issueDate: issueDateFormatted,
+            reference: `${issueDate.getMonth() + 1}/${issueDate.getFullYear()} - Plano semanal`,
+            total: amount,
             currency: 'BRL',
-            method: 'pix',
-            status: 'pending',
-            dueDate: dueDateFormatted,
-            description,
+            status: 'open',
           };
 
-          targetedPaymentId = payment.id;
-          targetedEnrollmentId = payment.enrollmentId ?? targetedEnrollmentId;
-          next.push(payment);
-        }
+      await saveDocument('invoices', invoice);
 
-        return next.sort(
-          (a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime(),
-        );
-      });
-
-      if (!targetedPaymentId) return;
-
-      const paymentId = targetedPaymentId!;
-      const enrollmentId = targetedEnrollmentId ?? `${studentId}-unassigned-plan`;
-
-      setInvoices((prev) => {
-        const existing = prev.find((invoice) => invoice.paymentId === paymentId);
-        if (existing) {
-          return prev.map((invoice) =>
-            invoice.paymentId === paymentId
-              ? {
-                  ...invoice,
-                  issueDate: issueDateFormatted,
-                  total: amount,
-                  status: 'open',
-                  reference: invoice.reference ?? `${issueDate.getMonth() + 1}/${issueDate.getFullYear()}`,
-                }
-              : invoice,
-          );
-        }
-
-        const invoice: Invoice = {
-          id: generateId('invoice'),
-          paymentId,
-          enrollmentId,
-          issueDate: issueDateFormatted,
-          reference: `${issueDate.getMonth() + 1}/${issueDate.getFullYear()} - Plano semanal`,
-          total: amount,
-          currency: 'BRL',
-          status: 'open',
-        };
-
-        return [...prev, invoice];
-      });
-
-      setPaymentIntents((prev) =>
-        prev.map((intent) =>
-          intent.paymentId === paymentId
-            ? { ...intent, amount, enrollmentId }
-            : intent,
-        ),
-      );
+      const existingIntent = paymentIntents.find((intent) => intent.paymentId === paymentId);
+      if (existingIntent) {
+        await updateDoc(doc(db, 'paymentIntents', existingIntent.id), { amount, enrollmentId });
+      }
 
       logEvent('payment_posted', 'Cobrança atualizada para refletir novo plano.', {
         studentId,
-        paymentId,
+        paymentId: payment.id,
         amount,
         billing,
       });
     },
-    [enrollments, logEvent],
+    [createCollectionId, enrollments, invoices, logEvent, paymentIntents, payments, saveDocument],
   );
 
   const selectPlanForStudent = useCallback(
-    (studentId: string, planOptionId: string, billing: StudentPlan['billing']) => {
+    async (studentId: string, planOptionId: string, billing: StudentPlan['billing']) => {
       const option = planOptions.find((item) => item.id === planOptionId);
       if (!option) {
         throw new Error('Plano selecionado não encontrado.');
@@ -666,7 +577,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       const now = new Date();
       const newPlan: StudentPlan = {
-        id: generateId('plan'),
+        id: createCollectionId('studentPlans'),
         studentId,
         planOptionId,
         billing,
@@ -675,10 +586,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         status: 'active',
       };
 
-      setStudentPlans((prev) => {
-        const filtered = prev.filter((plan) => plan.studentId !== studentId);
-        return [...filtered, newPlan];
-      });
+      await saveDocument('studentPlans', newPlan);
 
       logEvent('enrollment_created', 'Plano selecionado/atualizado pelo aluno', {
         studentId,
@@ -686,11 +594,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         billing,
       });
 
-      upsertPlanPayment(studentId, option, billing);
+      await upsertPlanPayment(studentId, option, billing);
 
       return newPlan;
     },
-    [logEvent, planOptions, upsertPlanPayment],
+    [createCollectionId, logEvent, planOptions, saveDocument, upsertPlanPayment],
   );
 
   const getWeeklyUsageForStudent = useCallback(
@@ -731,7 +639,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   );
 
   const bookSessionForStudent = useCallback(
-    (sessionId: string, studentId: string) => {
+    async (sessionId: string, studentId: string) => {
       const targetSession = sessions.find((item) => item.id === sessionId);
       const activePlan = getActivePlanForStudent(studentId);
       if (!targetSession || !activePlan) {
@@ -748,7 +656,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       }
 
       const newBooking: SessionBooking = {
-        id: generateId('booking'),
+        id: createCollectionId('sessionBookings'),
         studentId,
         sessionId,
         weekStart: usage.weekStart,
@@ -756,7 +664,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         status: 'booked',
       };
 
-      setSessionBookings((prev) => [...prev, newBooking]);
+      await saveDocument('sessionBookings', newBooking);
       logEvent('enrollment_created', 'Reserva realizada com base no plano semanal', {
         studentId,
         sessionId,
@@ -765,13 +673,13 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       return newBooking;
     },
-    [getActivePlanForStudent, getWeeklyUsageForStudent, isSessionBooked, logEvent, sessions],
+    [createCollectionId, getActivePlanForStudent, getWeeklyUsageForStudent, isSessionBooked, logEvent, saveDocument, sessions],
   );
 
   const reinstateClassForWeek = useCallback(
-    (studentId: string, weekStart: string, amount = 1, notes?: string) => {
+    async (studentId: string, weekStart: string, amount = 1, notes?: string) => {
       const reinstatement: CreditReinstatement = {
-        id: generateId('reinstatement'),
+        id: createCollectionId('creditReinstatements'),
         studentId,
         weekStart,
         amount,
@@ -779,7 +687,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       };
 
-      setCreditReinstatements((prev) => [...prev, reinstatement]);
+      await saveDocument('creditReinstatements', reinstatement);
       logEvent('attendance_marked', 'Crédito semanal reinserido pelo instrutor', {
         studentId,
         weekStart,
@@ -788,7 +696,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       return reinstatement;
     },
-    [logEvent],
+    [createCollectionId, logEvent, saveDocument],
   );
 
   const getEnrollmentForStudent = useCallback(
@@ -798,7 +706,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   );
 
   const enrollStudentInClass = useCallback(
-    (studentId: string, classId: string) => {
+    async (studentId: string, classId: string) => {
       const activePlan = getActivePlanForStudent(studentId);
       const weeklyUsage = getWeeklyUsageForStudent(studentId);
 
@@ -847,9 +755,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           updatedAt: now,
         };
 
-        setEnrollments((prev) =>
-          prev.map((enrollment) => (enrollment.id === existing.id ? reactivated : enrollment)),
-        );
+        await saveDocument('enrollments', reactivated);
 
         logEvent('enrollment_created', 'Inscrição reativada após cancelamento.', {
           enrollmentId: existing.id,
@@ -862,7 +768,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       }
 
       const enrollment: Enrollment = {
-        id: generateId('enrollment'),
+        id: createCollectionId('enrollments'),
         studentId,
         classId,
         status: isWaitlist ? 'waitlist' : 'active',
@@ -870,7 +776,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         updatedAt: now,
       };
 
-      setEnrollments((prev) => [...prev, enrollment]);
+      await saveDocument('enrollments', enrollment);
       logEvent('enrollment_created', 'Inscrição criada com validação de capacidade.', {
         enrollmentId: enrollment.id,
         classId,
@@ -880,7 +786,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       return { enrollment, isWaitlist, alreadyEnrolled: false };
     },
-    [classes, enrollments, getActivePlanForStudent, getWeeklyUsageForStudent, logEvent],
+    [classes, createCollectionId, enrollments, getActivePlanForStudent, getWeeklyUsageForStudent, logEvent, saveDocument],
   );
 
   const getCapacityUsage = useCallback(
@@ -929,7 +835,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       .map((payment) => {
         const invoice = invoices.find((item) => item.paymentId === payment.id);
         const student = students.find((item) => item.id === payment.studentId);
-        const email = seedAccounts.find((account) => account.id === student?.userId)?.email;
+        const email = users.find((account) => account.id === student?.userId)?.email;
         const isOverdue = new Date(payment.dueDate) < new Date();
         return {
           payment,
@@ -939,7 +845,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           status: payment.status === 'failed' ? 'failed' : isOverdue ? 'overdue' : 'pending',
         } as const;
       });
-  }, [enrollments, invoices, payments, students]);
+  }, [enrollments, invoices, payments, students, users]);
 
   const getStudentAccountSnapshot = useCallback(
     (studentId: string): StudentAccountSnapshot => {
@@ -997,86 +903,116 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     return { totalRevenue, pendingRevenue, averageUtilization, attendanceRate, revenueByStudent, utilizationByClass };
   }, [attendance, classes, enrollments, payments]);
 
-  const createClass = (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const now = new Date().toISOString();
-    setClasses((prev) => [
-      ...prev,
-      {
+  const createClass = useCallback(
+    async (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => {
+      const now = new Date().toISOString();
+      const newClass: TrainingClass = {
         ...payload,
-        id: generateId('class'),
+        id: createCollectionId('classes'),
         createdAt: now,
         updatedAt: now,
-      },
-    ]);
-  };
+      };
 
-  const updateClass = (id: string, payload: Partial<TrainingClass>) => {
-    setClasses((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...payload, updatedAt: new Date().toISOString() } : item)),
-    );
-  };
+      await saveDocument('classes', newClass);
+    },
+    [createCollectionId, saveDocument],
+  );
 
-  const deleteClass = (id: string) => {
-    setClasses((prev) => prev.filter((item) => item.id !== id));
-    setSessions((prevSessions) => {
-      const sessionIds = prevSessions.filter((session) => session.classId === id).map((session) => session.id);
-      setAttendance((prevAttendance) =>
-        prevAttendance.filter((item) => !sessionIds.includes(item.sessionId)),
-      );
-      return prevSessions.filter((session) => session.classId !== id);
-    });
-    setEnrollments((prev) => prev.filter((enrollment) => enrollment.classId !== id));
-  };
+  const updateClass = useCallback(
+    async (id: string, payload: Partial<TrainingClass>) => {
+      const ref = doc(db, 'classes', id);
+      await updateDoc(ref, { ...payload, updatedAt: new Date().toISOString() });
+    },
+    [],
+  );
 
-  const createSession = (payload: Omit<ClassSession, 'id'>) => {
-    setSessions((prev) => [...prev, { ...payload, id: generateId('session') }]);
-  };
+  const deleteClass = useCallback(
+    async (id: string) => {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'classes', id));
 
-  const updateSession = (id: string, payload: Partial<ClassSession>) => {
-    setSessions((prev) => prev.map((item) => (item.id === id ? { ...item, ...payload } : item)));
-  };
+      const relatedSessions = await getDocs(query(collection(db, 'sessions'), where('classId', '==', id)));
+      const sessionIds = relatedSessions.docs.map((snap) => snap.id);
+      relatedSessions.docs.forEach((snap) => batch.delete(snap.ref));
 
-  const deleteSession = (id: string) => {
-    setSessions((prev) => prev.filter((item) => item.id !== id));
-    setAttendance((prev) => prev.filter((item) => item.sessionId !== id));
-  };
-
-  const toggleAttendance = (
-    sessionId: string,
-    enrollmentId: string,
-    status: Attendance['status'],
-  ) => {
-    setAttendance((prev) => {
-      const existing = prev.find(
-        (entry) => entry.sessionId === sessionId && entry.enrollmentId === enrollmentId,
-      );
-
-      if (existing) {
-        return prev.map((entry) =>
-          entry.id === existing.id ? { ...entry, status, checkedInAt: new Date().toISOString() } : entry,
-        );
+      if (sessionIds.length) {
+        for (const chunk of chunkArray(sessionIds)) {
+          const attendanceSnap = await getDocs(query(collection(db, 'attendance'), where('sessionId', 'in', chunk)));
+          attendanceSnap.docs.forEach((snap) => batch.delete(snap.ref));
+        }
       }
 
-      return [
-        ...prev,
-        {
-          id: generateId('attendance'),
+      const enrollmentsSnap = await getDocs(query(collection(db, 'enrollments'), where('classId', '==', id)));
+      enrollmentsSnap.docs.forEach((snap) => batch.delete(snap.ref));
+
+      await batch.commit();
+    },
+    [chunkArray],
+  );
+
+  const createSession = useCallback(
+    async (payload: Omit<ClassSession, 'id'>) => {
+      const session: ClassSession = { ...payload, id: createCollectionId('sessions') };
+      await saveDocument('sessions', session);
+    },
+    [createCollectionId, saveDocument],
+  );
+
+  const updateSession = useCallback(
+    async (id: string, payload: Partial<ClassSession>) => {
+      await updateDoc(doc(db, 'sessions', id), payload);
+    },
+    [],
+  );
+
+  const deleteSession = useCallback(
+    async (id: string) => {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'sessions', id));
+
+      const attendanceSnap = await getDocs(query(collection(db, 'attendance'), where('sessionId', '==', id)));
+      attendanceSnap.docs.forEach((snap) => batch.delete(snap.ref));
+
+      await batch.commit();
+    },
+    [],
+  );
+
+  const toggleAttendance = useCallback(
+    async (
+      sessionId: string,
+      enrollmentId: string,
+      status: Attendance['status'],
+    ) => {
+      const existing = attendance.find(
+        (entry) => entry.sessionId === sessionId && entry.enrollmentId === enrollmentId,
+      );
+      const nowIso = new Date().toISOString();
+
+      if (existing) {
+        await updateDoc(doc(db, 'attendance', existing.id), { status, checkedInAt: nowIso });
+      } else {
+        const newAttendance: Attendance = {
+          id: createCollectionId('attendance'),
           sessionId,
           enrollmentId,
           status,
-          checkedInAt: new Date().toISOString(),
-        },
-      ];
-    });
-    logEvent('attendance_marked', 'Status de presença atualizado manualmente.', {
-      sessionId,
-      enrollmentId,
-      status,
-    });
-  };
+          checkedInAt: nowIso,
+        };
+        await saveDocument('attendance', newAttendance);
+      }
+
+      logEvent('attendance_marked', 'Status de presença atualizado manualmente.', {
+        sessionId,
+        enrollmentId,
+        status,
+      });
+    },
+    [attendance, createCollectionId, logEvent, saveDocument],
+  );
 
   const recordCheckIn = useCallback(
-    (sessionId: string, enrollmentId: string, method: 'qr' | 'manual') => {
+    async (sessionId: string, enrollmentId: string, method: 'qr' | 'manual') => {
       if (!sessions.some((item) => item.id === sessionId)) {
         const message = 'Sessão não encontrada para check-in.';
         logEvent('validation_error', message, { sessionId, enrollmentId });
@@ -1108,40 +1044,25 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       }
 
       const note = method === 'qr' ? 'Check-in via QR Code' : 'Check-in manual';
-      let created: Attendance | undefined;
+      const nowIso = new Date().toISOString();
+      const existing = attendance.find(
+        (entry) => entry.sessionId === sessionId && entry.enrollmentId === enrollmentId,
+      );
+      const created: Attendance = existing
+        ? { ...existing, status: 'present', checkedInAt: nowIso, notes: note }
+        : {
+            id: createCollectionId('attendance'),
+            sessionId,
+            enrollmentId,
+            status: 'present',
+            checkedInAt: nowIso,
+            notes: note,
+          };
 
-      setAttendance((prev) => {
-        const existing = prev.find(
-          (entry) => entry.sessionId === sessionId && entry.enrollmentId === enrollmentId,
-        );
-
-        if (existing) {
-          created = { ...existing, status: 'present', checkedInAt: new Date().toISOString(), notes: note };
-          return prev.map((entry) => (entry.id === existing.id ? created! : entry));
-        }
-
-        created = {
-          id: generateId('attendance'),
-          sessionId,
-          enrollmentId,
-          status: 'present',
-          checkedInAt: new Date().toISOString(),
-          notes: note,
-        };
-
-        return [...prev, created];
-      });
-
-      if (!created) {
-        created = {
-          id: generateId('attendance'),
-          sessionId,
-          enrollmentId,
-          status: 'present',
-          checkedInAt: new Date().toISOString(),
-          notes: note,
-        };
-        setAttendance((prev) => [...prev, created!]);
+      if (existing) {
+        await updateDoc(doc(db, 'attendance', existing.id), created);
+      } else {
+        await saveDocument('attendance', created);
       }
 
       logEvent('attendance_marked', 'Check-in registrado após validação de pagamento.', {
@@ -1151,75 +1072,72 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       });
       return created;
     },
-    [enrollments, invoices, logEvent, payments, sessions],
+    [attendance, createCollectionId, enrollments, invoices, logEvent, payments, saveDocument, sessions],
   );
 
-  const updateEnrollmentStatus = (enrollmentId: string, status: Enrollment['status']) => {
-    setEnrollments((prev) =>
-      prev.map((enrollment) => (enrollment.id === enrollmentId ? { ...enrollment, status } : enrollment)),
-    );
-  };
+  const updateEnrollmentStatus = useCallback(async (enrollmentId: string, status: Enrollment['status']) => {
+    await updateDoc(doc(db, 'enrollments', enrollmentId), { status, updatedAt: new Date().toISOString() });
+  }, []);
 
   const cancelEnrollment = useCallback(
-    (enrollmentId: string) => {
+    async (enrollmentId: string) => {
       const nowIso = new Date().toISOString();
-      setEnrollments((prev) =>
-        prev.map((enrollment) =>
-          enrollment.id === enrollmentId
-            ? { ...enrollment, status: 'cancelled', updatedAt: nowIso }
-            : enrollment,
-        ),
-      );
+      const batch = writeBatch(db);
 
-      setPayments((prev) =>
-        prev.map((payment) =>
-          payment.enrollmentId === enrollmentId
-            ? {
-                ...payment,
-                status: 'failed',
-                description: payment.description
-                  ? `${payment.description} (cancelado)`
-                  : 'Pagamento cancelado',
-              }
-            : payment,
-        ),
-      );
+      batch.update(doc(db, 'enrollments', enrollmentId), { status: 'cancelled', updatedAt: nowIso });
 
-      setInvoices((prev) =>
-        prev.map((invoice) =>
-          invoice.enrollmentId === enrollmentId
-            ? { ...invoice, status: 'void', notes: invoice.notes ?? 'Cancelado pelo aluno.' }
-            : invoice,
-        ),
-      );
+      const paymentsSnap = await getDocs(query(collection(db, 'payments'), where('enrollmentId', '==', enrollmentId)));
+      paymentsSnap.docs.forEach((snap) => {
+        const payment = snap.data() as Payment;
+        batch.update(snap.ref, {
+          status: 'failed',
+          description: payment.description ? `${payment.description} (cancelado)` : 'Pagamento cancelado',
+        });
+      });
+
+      const invoicesSnap = await getDocs(query(collection(db, 'invoices'), where('enrollmentId', '==', enrollmentId)));
+      invoicesSnap.docs.forEach((snap) => {
+        const invoice = snap.data() as Invoice;
+        batch.update(snap.ref, { status: 'void', notes: invoice.notes ?? 'Cancelado pelo aluno.' });
+      });
+
+      await batch.commit();
 
       logEvent('enrollment_cancelled', 'Inscrição cancelada pelo aluno.', { enrollmentId });
     },
     [logEvent],
   );
 
-  const createEvaluation = useCallback((payload: Omit<Evaluation, 'id'>) => {
-    setEvaluations((prev) => [{ ...payload, id: generateId('evaluation') }, ...prev]);
+  const createEvaluation = useCallback(
+    async (payload: Omit<Evaluation, 'id'>) => {
+      const evaluation: Evaluation = { ...payload, id: createCollectionId('evaluations') };
+      await saveDocument('evaluations', evaluation);
+    },
+    [createCollectionId, saveDocument],
+  );
+
+  const updateEvaluation = useCallback(async (id: string, payload: Partial<Evaluation>) => {
+    await updateDoc(doc(db, 'evaluations', id), payload);
   }, []);
 
-  const updateEvaluation = useCallback((id: string, payload: Partial<Evaluation>) => {
-    setEvaluations((prev) => prev.map((item) => (item.id === id ? { ...item, ...payload } : item)));
+  const deleteEvaluation = useCallback(async (id: string) => {
+    await deleteDoc(doc(db, 'evaluations', id));
   }, []);
 
-  const deleteEvaluation = useCallback((id: string) => {
-    setEvaluations((prev) => prev.filter((item) => item.id !== id));
+  const createGoal = useCallback(
+    async (payload: Omit<Goal, 'id'>) => {
+      const goal: Goal = { ...payload, id: createCollectionId('goals') };
+      await saveDocument('goals', goal);
+    },
+    [createCollectionId, saveDocument],
+  );
+
+  const updateGoal = useCallback(async (id: string, payload: Partial<Goal>) => {
+    await updateDoc(doc(db, 'goals', id), payload);
   }, []);
 
-  const createGoal = useCallback((payload: Omit<Goal, 'id'>) => {
-    setGoals((prev) => [{ ...payload, id: generateId('goal') }, ...prev]);
-  }, []);
-
-  const updateGoal = useCallback((id: string, payload: Partial<Goal>) => {
-    setGoals((prev) => prev.map((item) => (item.id === id ? { ...item, ...payload } : item)));
-  }, []);
-
-  const deleteGoal = useCallback((id: string) => {
-    setGoals((prev) => prev.filter((item) => item.id !== id));
+  const deleteGoal = useCallback(async (id: string) => {
+    await deleteDoc(doc(db, 'goals', id));
   }, []);
 
   const getStudentEvaluations = useCallback(
@@ -1231,10 +1149,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   );
 
   const chargeStoredCard = useCallback(
-    (studentId: string, amount: number, description: string) => {
+    async (studentId: string, amount: number, description: string) => {
       const now = new Date();
       const payment: Payment = {
-        id: generateId('payment'),
+        id: createCollectionId('payments'),
         studentId,
         amount,
         currency: 'BRL',
@@ -1245,7 +1163,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         description,
       };
 
-      setPayments((prev) => [payment, ...prev]);
+      await saveDocument('payments', payment);
       logEvent('payment_posted', 'Pagamento lançado no cartão em arquivo.', {
         paymentId: payment.id,
         studentId,
@@ -1254,14 +1172,14 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       });
       return payment;
     },
-    [logEvent],
+    [createCollectionId, logEvent, saveDocument],
   );
 
   const createOneTimePayment = useCallback(
-    (studentId: string, amount: number, method: Payment['method'], description: string) => {
+    async (studentId: string, amount: number, method: Payment['method'], description: string) => {
       const now = new Date();
       const payment: Payment = {
-        id: generateId('payment'),
+        id: createCollectionId('payments'),
         studentId,
         amount,
         currency: 'BRL',
@@ -1272,7 +1190,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         description,
       };
 
-      setPayments((prev) => [payment, ...prev]);
+      await saveDocument('payments', payment);
       logEvent('payment_posted', 'Pagamento avulso registrado.', {
         paymentId: payment.id,
         studentId,
@@ -1282,17 +1200,17 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       });
       return payment;
     },
-    [logEvent],
+    [createCollectionId, logEvent, saveDocument],
   );
 
   const createPaymentIntentForEnrollment = useCallback(
-    (enrollmentId: string, amount: number, method: Payment['method'], description: string) => {
+    async (enrollmentId: string, amount: number, method: Payment['method'], description: string) => {
       const enrollment = enrollments.find((item) => item.id === enrollmentId);
       const now = new Date();
       const studentId = enrollment?.studentId ?? 'student-unknown';
 
       const payment: Payment = {
-        id: generateId('payment'),
+        id: createCollectionId('payments'),
         studentId,
         enrollmentId,
         amount,
@@ -1304,7 +1222,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       };
 
       const invoice: Invoice = {
-        id: generateId('invoice'),
+        id: createCollectionId('invoices'),
         paymentId: payment.id,
         enrollmentId,
         issueDate: now.toISOString().slice(0, 10),
@@ -1315,7 +1233,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       };
 
       const intent: PaymentIntent = {
-        id: generateId('pi'),
+        id: createCollectionId('paymentIntents'),
         paymentId: payment.id,
         enrollmentId,
         amount,
@@ -1325,9 +1243,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         clientSecret: `secret_${payment.id}`,
       };
 
-      setPayments((prev) => [payment, ...prev]);
-      setInvoices((prev) => [invoice, ...prev]);
-      setPaymentIntents((prev) => [intent, ...prev]);
+      await Promise.all([
+        saveDocument('payments', payment),
+        saveDocument('invoices', invoice),
+        saveDocument('paymentIntents', intent),
+      ]);
       logEvent('payment_posted', 'Intent de pagamento criada para matrícula.', {
         paymentId: payment.id,
         enrollmentId,
@@ -1337,11 +1257,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       return intent;
     },
-    [enrollments, logEvent],
+    [createCollectionId, enrollments, logEvent, saveDocument],
   );
 
   const startPaymentSession = useCallback(
-    (intentId: string, fallbackIntent?: PaymentIntent) => {
+    async (intentId: string, fallbackIntent?: PaymentIntent) => {
       const intent = paymentIntents.find((item) => item.id === intentId) ?? fallbackIntent;
       if (!intent) {
         throw new Error('Intent de pagamento não encontrada.');
@@ -1349,7 +1269,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       const now = new Date();
       const session: PaymentSession = {
-        id: generateId('ps'),
+        id: createCollectionId('paymentSessions'),
         intentId,
         status: 'open',
         checkoutUrl: `https://pagamentos.dottosports.test/${intentId}`,
@@ -1357,18 +1277,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         expiresAt: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
       };
 
-      setPaymentIntents((prev) =>
-        prev.map((item) => (item.id === intentId ? { ...item, status: 'processing' } : item)),
-      );
-      setPaymentSessions((prev) => [session, ...prev]);
+      await updateDoc(doc(db, 'paymentIntents', intent.id), { status: 'processing' });
+      await saveDocument('paymentSessions', session);
 
       return session;
     },
-    [paymentIntents],
+    [createCollectionId, paymentIntents, saveDocument],
   );
 
   const processPaymentWebhook = useCallback(
-    (
+    async (
       sessionId: string,
       result: 'succeeded' | 'failed',
       failureReason?: string,
@@ -1384,18 +1302,19 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const nowIso = new Date().toISOString();
       const fees = intent.amount * 0.05;
       const paymentId = intent.paymentId;
+      const invoice = invoices.find((item) => item.paymentId === paymentId);
+      const payment = payments.find((item) => item.id === paymentId);
 
-      setPaymentSessions((prev) =>
-        prev.map((item) =>
-          item.id === sessionId
-            ? { ...item, status: 'completed', lastWebhookStatus: result, failureReason }
-            : item,
-        ),
-      );
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'paymentSessions', session.id), {
+        status: 'completed',
+        lastWebhookStatus: result,
+        failureReason,
+      });
 
       if (result === 'succeeded') {
         const receipt: Receipt = {
-          id: generateId('receipt'),
+          id: createCollectionId('receipts'),
           paymentId,
           enrollmentId: intent.enrollmentId,
           issuedAt: nowIso,
@@ -1404,7 +1323,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         };
 
         const settlement: Settlement = {
-          id: generateId('settlement'),
+          id: createCollectionId('settlements'),
           period: nowIso.slice(0, 10),
           gross: intent.amount,
           fees,
@@ -1413,23 +1332,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           receiptIds: [receipt.id],
         };
 
-        setPaymentIntents((prev) =>
-          prev.map((item) => (item.id === intent.id ? { ...item, status: 'succeeded' } : item)),
-        );
-        setPayments((prev) =>
-          prev.map((payment) =>
-            payment.id === paymentId
-              ? { ...payment, status: 'paid', paidAt: nowIso, receiptId: receipt.id }
-              : payment,
-          ),
-        );
-        setInvoices((prev) =>
-          prev.map((invoice) =>
-            invoice.paymentId === paymentId ? { ...invoice, status: 'paid' } : invoice,
-          ),
-        );
-        setReceipts((prev) => [receipt, ...prev]);
-        setSettlements((prev) => [settlement, ...prev]);
+        batch.update(doc(db, 'paymentIntents', intent.id), { status: 'succeeded' });
+        batch.update(doc(db, 'payments', paymentId), { status: 'paid', paidAt: nowIso, receiptId: receipt.id });
+        if (invoice) {
+          batch.update(doc(db, 'invoices', invoice.id), { status: 'paid' });
+        }
+        batch.set(doc(db, 'receipts', receipt.id), receipt);
+        batch.set(doc(db, 'settlements', settlement.id), settlement);
+
+        await batch.commit();
+
         logEvent('payment_posted', 'Pagamento confirmado e conciliado.', {
           paymentId,
           intentId: intent.id,
@@ -1439,25 +1351,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           receiptId: receipt.id,
         });
       } else {
-        setPaymentIntents((prev) =>
-          prev.map((item) =>
-            item.id === intent.id ? { ...item, status: 'failed', paymentMethod: intent.paymentMethod } : item,
-          ),
-        );
-        setPayments((prev) =>
-          prev.map((payment) =>
-            payment.id === paymentId
-              ? { ...payment, status: 'failed', description: failureReason ?? payment.description }
-              : payment,
-          ),
-        );
-        setInvoices((prev) =>
-          prev.map((invoice) =>
-            invoice.paymentId === paymentId
-              ? { ...invoice, status: 'open', notes: failureReason ?? invoice.notes }
-              : invoice,
-          ),
-        );
+        batch.update(doc(db, 'paymentIntents', intent.id), { status: 'failed', paymentMethod: intent.paymentMethod });
+        batch.update(doc(db, 'payments', paymentId), {
+          status: 'failed',
+          description: failureReason ?? payment?.description,
+        });
+        if (invoice) {
+          batch.update(doc(db, 'invoices', invoice.id), { status: 'open', notes: failureReason ?? invoice.notes });
+        }
+        await batch.commit();
+
         logEvent('payment_posted', 'Pagamento marcado como falho após webhook.', {
           paymentId,
           intentId: intent.id,
@@ -1468,11 +1371,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [logEvent, paymentIntents, paymentSessions],
+    [createCollectionId, invoices, logEvent, paymentIntents, paymentSessions, payments],
   );
 
   const payOutstandingPayment = useCallback(
-    (paymentId: string) => {
+    async (paymentId: string) => {
       const payment = payments.find((item) => item.id === paymentId);
       if (!payment) {
         throw new Error('Cobrança não encontrada.');
@@ -1486,9 +1389,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         (item) => item.paymentId === paymentId && item.status !== 'succeeded',
       );
 
-      const intent: PaymentIntent =
-        existingIntent ?? {
-          id: generateId('pi'),
+      let intent: PaymentIntent =
+        existingIntent ??
+        {
+          id: createCollectionId('paymentIntents'),
           paymentId,
           enrollmentId: payment.enrollmentId,
           amount: payment.amount,
@@ -1499,15 +1403,15 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         };
 
       if (!existingIntent) {
-        setPaymentIntents((prev) => [intent, ...prev]);
+        await saveDocument('paymentIntents', intent);
       }
 
-      const session = startPaymentSession(intent.id, intent);
-      processPaymentWebhook(session.id, 'succeeded', undefined, session, intent);
+      const session = await startPaymentSession(intent.id, intent);
+      await processPaymentWebhook(session.id, 'succeeded', undefined, session, intent);
 
       return { session, intent };
     },
-    [paymentIntents, payments, processPaymentWebhook, startPaymentSession],
+    [createCollectionId, paymentIntents, payments, processPaymentWebhook, saveDocument, startPaymentSession],
   );
 
   const updateCardOnFile = useCallback((payload: Partial<CardOnFile>) => {
@@ -1538,6 +1442,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       outstandingBalances,
       cardOnFile,
       rosterByClass,
+      instructorProfiles,
+      loading,
       reloadFromStorage,
       getStudentAccountSnapshot,
       payOutstandingPayment,
@@ -1599,6 +1505,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       outstandingBalances,
       cardOnFile,
       rosterByClass,
+      instructorProfiles,
+      loading,
       reloadFromStorage,
       getStudentAccountSnapshot,
       payOutstandingPayment,
