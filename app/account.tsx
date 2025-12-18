@@ -101,11 +101,11 @@ export default function AccountScreen() {
       : selectedOption.priceUpfront
     : 0;
 
-  const handleSelectPlan = (planOptionId: string) => {
+  const handleSelectPlan = async (planOptionId: string) => {
     if (!studentId) return;
 
     try {
-      selectPlanForStudent(studentId, planOptionId, billingCycle);
+      await selectPlanForStudent(studentId, planOptionId, billingCycle);
       Alert.alert(
         activePlan ? 'Plano atualizado' : 'Plano salvo',
         billingCycle === 'recurring'
