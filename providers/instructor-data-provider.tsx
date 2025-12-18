@@ -38,6 +38,7 @@ import type {
   CreditReinstatement,
 } from '@/constants/schema';
 import { db } from '@/services/firebase';
+import { useAuth } from './auth-provider';
 
 export type RosterEntry = {
   enrollment: Enrollment;
@@ -301,6 +302,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [cardOnFile, setCardOnFile] = useState<CardOnFile>(defaultCard);
   const [events, setEvents] = useState<SystemEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user, hasRole, initializing } = useAuth();
   const createCollectionId = useCallback((path: string) => doc(collection(db, path)).id, []);
 
   const normalizeFirestoreValue = useCallback((value: unknown): unknown => {
@@ -336,8 +338,56 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [normalizeFirestoreValue],
   );
 
+  const filterPlanOptions = useCallback((items: PlanOption[]) => {
+    setPlanOptions(items.filter((option) => ALLOWED_WEEKLY_CLASSES.includes(option.weeklyClasses)));
+  }, []);
+
+  const isInstructor = hasRole(['INSTRUCTOR', 'ADMIN']);
+
+  const syncCurrentUserRecord = useCallback(async () => {
+    if (!user) return;
+
+    const ref = doc(db, 'users', user.uid);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const payload = mapSnapshot<UserAccount & { displayName?: string }>(snap.data(), snap.id);
+      setUsers([payload]);
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+    setUsers([
+      {
+        id: user.uid,
+        email: user.email,
+        role: user.role,
+        status: 'active',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        displayName: user.displayName,
+      },
+    ]);
+  }, [mapSnapshot, user]);
+
   useEffect(() => {
+    if (!isInstructor) {
+      setPayments([]);
+      setInvoices([]);
+      setPaymentIntents([]);
+      setPaymentSessions([]);
+      setReceipts([]);
+      setSettlements([]);
+      setEvaluations([]);
+      setGoals([]);
+    }
+  }, [isInstructor]);
+
+  useEffect(() => {
+    if (initializing || !user) return;
+
     const subscriptions: Unsubscribe[] = [];
+
+    setLoading(true);
 
     const subscribe = <T,>(path: string, setter: (items: T[]) => void) => {
       const unsubscribe = onSnapshot(collection(db, path), (snap) => {
@@ -352,59 +402,71 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     subscribe<ClassSession>('sessions', setSessions);
     subscribe<Enrollment>('enrollments', setEnrollments);
     subscribe<Attendance>('attendance', setAttendance);
-    subscribe<Payment>('payments', setPayments);
-    subscribe<Invoice>('invoices', setInvoices);
-    subscribe<PaymentIntent>('paymentIntents', setPaymentIntents);
-    subscribe<PaymentSession>('paymentSessions', setPaymentSessions);
-    subscribe<Receipt>('receipts', setReceipts);
-    subscribe<Settlement>('settlements', setSettlements);
-    subscribe<Evaluation>('evaluations', setEvaluations);
-    subscribe<Goal>('goals', setGoals);
-    subscribe<PlanOption>('planOptions', (items) =>
-      setPlanOptions(items.filter((option) => ALLOWED_WEEKLY_CLASSES.includes(option.weeklyClasses))),
-    );
+    subscribe<PlanOption>('planOptions', filterPlanOptions);
     subscribe<StudentPlan>('studentPlans', setStudentPlans);
     subscribe<SessionBooking>('sessionBookings', setSessionBookings);
     subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements);
     subscribe<StudentProfile>('studentProfiles', setStudents);
     subscribe<InstructorProfile>('instructorProfiles', setInstructorProfiles);
-    subscribe<UserAccount & { displayName?: string }>('users', setUsers);
+
+    if (isInstructor) {
+      subscribe<Payment>('payments', setPayments);
+      subscribe<Invoice>('invoices', setInvoices);
+      subscribe<PaymentIntent>('paymentIntents', setPaymentIntents);
+      subscribe<PaymentSession>('paymentSessions', setPaymentSessions);
+      subscribe<Receipt>('receipts', setReceipts);
+      subscribe<Settlement>('settlements', setSettlements);
+      subscribe<Evaluation>('evaluations', setEvaluations);
+      subscribe<Goal>('goals', setGoals);
+      subscribe<UserAccount & { displayName?: string }>('users', setUsers);
+    } else {
+      void syncCurrentUserRecord();
+    }
 
     return () => subscriptions.forEach((unsubscribe) => unsubscribe());
-  }, [mapSnapshot]);
+  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, syncCurrentUserRecord, user]);
 
   const reloadFromStorage = useCallback(async () => {
+    if (initializing || !user) return;
+
     const fetchCollection = async <T,>(path: string, setter: (items: T[]) => void) => {
       const snap = await getDocs(collection(db, path));
       const payload = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
       setter(payload);
     };
 
-    await Promise.all([
+    setLoading(true);
+
+    const baseCollections: Promise<void>[] = [
       fetchCollection<TrainingClass>('classes', setClasses),
       fetchCollection<ClassSession>('sessions', setSessions),
       fetchCollection<Enrollment>('enrollments', setEnrollments),
       fetchCollection<Attendance>('attendance', setAttendance),
-      fetchCollection<Payment>('payments', setPayments),
-      fetchCollection<Invoice>('invoices', setInvoices),
-      fetchCollection<PaymentIntent>('paymentIntents', setPaymentIntents),
-      fetchCollection<PaymentSession>('paymentSessions', setPaymentSessions),
-      fetchCollection<Receipt>('receipts', setReceipts),
-      fetchCollection<Settlement>('settlements', setSettlements),
-      fetchCollection<Evaluation>('evaluations', setEvaluations),
-      fetchCollection<Goal>('goals', setGoals),
-      fetchCollection<PlanOption>('planOptions', (items) =>
-        setPlanOptions(items.filter((option) => ALLOWED_WEEKLY_CLASSES.includes(option.weeklyClasses))),
-      ),
+      fetchCollection<PlanOption>('planOptions', filterPlanOptions),
       fetchCollection<StudentPlan>('studentPlans', setStudentPlans),
       fetchCollection<SessionBooking>('sessionBookings', setSessionBookings),
       fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements),
       fetchCollection<StudentProfile>('studentProfiles', setStudents),
       fetchCollection<InstructorProfile>('instructorProfiles', setInstructorProfiles),
-      fetchCollection<UserAccount & { displayName?: string }>('users', setUsers),
-    ]);
+    ];
+
+    const instructorCollections: Promise<void>[] = isInstructor
+      ? [
+          fetchCollection<Payment>('payments', setPayments),
+          fetchCollection<Invoice>('invoices', setInvoices),
+          fetchCollection<PaymentIntent>('paymentIntents', setPaymentIntents),
+          fetchCollection<PaymentSession>('paymentSessions', setPaymentSessions),
+          fetchCollection<Receipt>('receipts', setReceipts),
+          fetchCollection<Settlement>('settlements', setSettlements),
+          fetchCollection<Evaluation>('evaluations', setEvaluations),
+          fetchCollection<Goal>('goals', setGoals),
+          fetchCollection<UserAccount & { displayName?: string }>('users', setUsers),
+        ]
+      : [syncCurrentUserRecord()];
+
+    await Promise.all([...baseCollections, ...instructorCollections]);
     setLoading(false);
-  }, [mapSnapshot]);
+  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, syncCurrentUserRecord, user]);
 
   useEffect(() => {
     void reloadFromStorage();
