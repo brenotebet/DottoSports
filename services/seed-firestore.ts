@@ -7,26 +7,13 @@ import { db } from '@/services/firebase';
 
 type SeedableCollection = keyof DatabaseSchema;
 
+// Seeded accounts and profiles require real Firebase Auth users. Create test accounts in Firebase Auth
+// and let AuthProvider create /users/{uid} documents on first login. Only seed content collections
+// that are not tied to an auth-generated identifier.
 const seedCollections: Array<{ key: SeedableCollection; data: any[] }> = [
-  { key: 'users', data: seedData.seedAccounts },
-  { key: 'instructorProfiles', data: seedData.instructorProfiles },
-  { key: 'studentProfiles', data: seedData.studentProfiles },
   { key: 'classes', data: seedData.classes },
   { key: 'sessions', data: seedData.sessions },
-  { key: 'enrollments', data: seedData.enrollments },
-  { key: 'attendance', data: seedData.attendance },
-  { key: 'payments', data: seedData.payments },
-  { key: 'invoices', data: seedData.invoices },
-  { key: 'paymentIntents', data: seedData.paymentIntents },
-  { key: 'paymentSessions', data: seedData.paymentSessions },
-  { key: 'receipts', data: seedData.receipts },
-  { key: 'settlements', data: seedData.settlements },
-  { key: 'evaluations', data: seedData.evaluations },
-  { key: 'goals', data: seedData.goals },
   { key: 'planOptions', data: seedData.planOptions },
-  { key: 'studentPlans', data: seedData.studentPlans },
-  { key: 'sessionBookings', data: seedData.sessionBookings },
-  { key: 'creditReinstatements', data: seedData.creditReinstatements },
 ];
 
 const collectionIsEmpty = async (key: SeedableCollection) => {

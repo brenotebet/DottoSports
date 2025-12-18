@@ -27,6 +27,8 @@ type SeedAccount = UserAccount & {
   displayName: string;
 };
 
+// Sample accounts are not seeded automatically because they require real Firebase Auth UIDs.
+// Create them in Firebase Auth first; the AuthProvider will populate /users/{uid} on login.
 export const seedAccounts: SeedAccount[] = [
   {
     id: 'user-admin-1',
@@ -354,25 +356,25 @@ export const settlements: Settlement[] = [
 ];
 
 export const seededDatabase: DatabaseSchema = {
-  users: seedAccounts,
-  instructorProfiles,
-  studentProfiles,
+  users: [],
+  instructorProfiles: [],
+  studentProfiles: [],
   classes,
   sessions,
-  enrollments,
-  attendance,
-  payments,
-  invoices,
-  receipts,
-  paymentIntents,
-  paymentSessions,
-  settlements,
-  evaluations,
-  goals,
+  enrollments: [],
+  attendance: [],
+  payments: [],
+  invoices: [],
+  receipts: [],
+  paymentIntents: [],
+  paymentSessions: [],
+  settlements: [],
+  evaluations: [],
+  goals: [],
   planOptions,
-  studentPlans,
-  sessionBookings,
-  creditReinstatements,
+  studentPlans: [],
+  sessionBookings: [],
+  creditReinstatements: [],
 };
 
 export const resolveSeedRole = (email: string): UserRole | null => {

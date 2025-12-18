@@ -1,6 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -303,7 +302,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<SystemEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, hasRole, initializing } = useAuth();
-  const [studentProfileId, setStudentProfileId] = useState<string | null>(null);
+  const [studentProfileId, setStudentProfileId] = useState<string | null | undefined>(undefined);
   const createCollectionId = useCallback((path: string) => doc(collection(db, path)).id, []);
 
   const normalizeFirestoreValue = useCallback((value: unknown): unknown => {
@@ -381,6 +380,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     }
 
     let isMounted = true;
+    setStudentProfileId(undefined);
 
     const resolveProfile = async () => {
       try {
@@ -404,6 +404,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (initializing || !user) return;
+    if (!isInstructor && studentProfileId === undefined) {
+      setLoading(true);
+      return;
+    }
 
     const subscriptions: Unsubscribe[] = [];
 
@@ -469,6 +473,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const reloadFromStorage = useCallback(async () => {
     if (initializing || !user) return;
+    if (!isInstructor && studentProfileId === undefined) {
+      setLoading(true);
+      return;
+    }
 
     const fetchCollection = async <T,>(
       path: string,
@@ -553,40 +561,23 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const ensureUserAccount = useCallback(
-    (email: string, displayName: string) => {
-      const existing = users.find((account) => account.email.toLowerCase() === email.toLowerCase());
-      if (existing) return existing;
-
-      const now = new Date().toISOString();
-      const id = createCollectionId('users');
-      const account: UserAccount & { displayName?: string } = {
-        id,
-        email,
-        role: 'STUDENT',
-        status: 'active',
-        createdAt: now,
-        updatedAt: now,
-        displayName,
-      };
-
-      void setDoc(doc(db, 'users', id), account, { merge: true });
-      return account;
-    },
-    [createCollectionId, users],
-  );
-
   const ensureStudentProfile = useCallback(
     (email: string, displayName: string) => {
-      const resolvedAccount = ensureUserAccount(email, displayName);
-      const resolvedUserId = resolvedAccount.id;
-      const existingProfile = students.find((profile) => profile.userId === resolvedUserId);
-      if (existingProfile) return existingProfile;
+      if (!user) {
+        throw new Error('Você precisa estar autenticado para criar ou acessar o perfil de aluno.');
+      }
 
+      const existingProfile = students.find((profile) => profile.userId === user.uid);
+      if (existingProfile) {
+        setStudentProfileId(existingProfile.id);
+        return existingProfile;
+      }
+
+      const profileId = studentProfileId ?? createCollectionId('studentProfiles');
       const profile: StudentProfile = {
-        id: createCollectionId('studentProfiles'),
-        userId: resolvedUserId,
-        fullName: displayName || email,
+        id: profileId,
+        userId: user.uid,
+        fullName: displayName || email || user.displayName || user.email,
         phone: '+55 11 99999-0000',
         birthDate: '1995-01-01',
         experienceLevel: 'beginner',
@@ -594,10 +585,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         emergencyContact: { name: 'Contato padrão', phone: '+55 11 98888-0000' },
       };
 
-      void setDoc(doc(db, 'studentProfiles', profile.id), profile);
+      setStudentProfileId(profile.id);
+      void setDoc(doc(db, 'studentProfiles', profile.id), profile, { merge: true });
       return profile;
     },
-    [createCollectionId, ensureUserAccount, students],
+    [createCollectionId, studentProfileId, students, user],
   );
 
   const saveDocument = useCallback(async <T extends { id: string }>(path: string, payload: T) => {
