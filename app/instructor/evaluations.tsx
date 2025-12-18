@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { TextInputProps } from 'react-native';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -8,16 +9,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import type { TextInputProps } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { TopBar } from '@/components/top-bar';
+import { Evaluation } from '@/constants/schema';
 import { Colors, Fonts } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/providers/auth-provider';
-import { Evaluation } from '@/constants/schema';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 export default function EvaluationsScreen() {
@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: '#fff',
-    fontFamily: Fonts.regular,
+    fontFamily: Fonts.mono,
   },
   textArea: {
     minHeight: 80,
