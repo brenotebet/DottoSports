@@ -1,14 +1,23 @@
-import { File, Paths } from 'expo-file-system';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  type User,
+} from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import type { UserRole } from '@/constants/schema';
 import { resolveSeedDisplayName, resolveSeedRole } from '@/constants/seed-data';
-import { getAccountInfo, sendEmailVerification, signInWithEmail, signUpWithEmail } from '@/services/firebase-auth';
+import { auth, db } from '@/services/firebase';
 
 export type AuthenticatedUser = {
   email: string;
-  idToken: string;
-  refreshToken: string;
+  idToken?: string;
+  refreshToken?: string;
   uid: string;
   role: UserRole;
   displayName: string;
@@ -33,115 +42,121 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const authStateFile = (() => {
-  const candidates = [
-    () => Paths.document,
-    () => Paths.cache,
-  ];
 
-  for (const getDirectory of candidates) {
-    try {
-      const directory = getDirectory();
+const userDocRef = (uid: string) => doc(db, 'users', uid);
 
-      if (directory?.uri) {
-        return new File(directory, 'auth-user.json');
-      }
-    } catch (error) {
-      console.warn('Não foi possível resolver um diretório para o cache de autenticação', error);
-    }
-  }
+const upsertUserDocument = async (firebaseUser: User, roleHint?: UserRole, displayNameHint?: string) => {
+  const ref = userDocRef(firebaseUser.uid);
+  const existing = await getDoc(ref);
+  const now = new Date().toISOString();
+  const email = firebaseUser.email ?? '';
+  const resolvedRole = (existing.data()?.role as UserRole | undefined) ?? resolveSeedRole(email) ?? roleHint ?? 'STUDENT';
+  const resolvedDisplayName =
+    existing.data()?.displayName ?? displayNameHint ?? resolveSeedDisplayName(email) ?? firebaseUser.displayName ?? email;
 
-  return null;
-})();
+  await setDoc(
+    ref,
+    {
+      id: firebaseUser.uid,
+      email,
+      role: resolvedRole,
+      displayName: resolvedDisplayName,
+      createdAt: existing.data()?.createdAt ?? now,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+
+  return { role: resolvedRole, displayName: resolvedDisplayName };
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [initializing, setInitializing] = useState(true);
 
-  const buildAuthenticatedUser = (credentials: Omit<AuthenticatedUser, 'role' | 'displayName'>) => {
-    const resolvedRole = resolveSeedRole(credentials.email) ?? 'STUDENT';
-
-    return {
-      ...credentials,
-      role: resolvedRole,
-      displayName: resolveSeedDisplayName(credentials.email) ?? credentials.email,
-    } satisfies AuthenticatedUser;
-  };
-
-  const persistUser = async (nextUser: AuthenticatedUser | null) => {
-    if (!authStateFile) return;
-
-    try {
-      if (nextUser) {
-        authStateFile.write(JSON.stringify(nextUser));
-      } else {
-        authStateFile.delete();
-      }
-    } catch (error) {
-      console.warn('Não foi possível atualizar o cache de autenticação', error);
-    }
-  };
-
   const login = async (email: string, password: string) => {
-    const credentials = await signInWithEmail(email.trim(), password);
-    const accountInfo = await getAccountInfo(credentials.idToken);
+    const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+    const firebaseUser = credential.user;
 
-    if (!accountInfo.emailVerified) {
-      await sendEmailVerification(credentials.idToken);
+    if (!firebaseUser.emailVerified) {
+      await sendEmailVerification(firebaseUser);
       throw new Error('Confirme seu e-mail antes de continuar. Enviamos um novo link de verificação.');
     }
 
-    const authenticated = buildAuthenticatedUser(credentials);
+    const { role, displayName } = await upsertUserDocument(firebaseUser);
+    const idToken = await firebaseUser.getIdToken();
+    const authenticated: AuthenticatedUser = {
+      email: firebaseUser.email ?? email,
+      uid: firebaseUser.uid,
+      role,
+      displayName,
+      idToken,
+      refreshToken: firebaseUser.refreshToken ?? undefined,
+    };
+
     setUser(authenticated);
-    await persistUser(authenticated);
   };
 
   const signup = async ({ email, password, ...profile }: SignupPayload) => {
-    const credentials = await signUpWithEmail(email.trim(), password);
-    await sendEmailVerification(credentials.idToken);
+    const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+    const firebaseUser = credential.user;
+
+    const displayName = `${profile.firstName} ${profile.lastName}`.trim();
+
+    if (displayName) {
+      await updateProfile(firebaseUser, { displayName });
+    }
+
+    await sendEmailVerification(firebaseUser);
+    await upsertUserDocument(firebaseUser, resolveSeedRole(email) ?? 'STUDENT', displayName);
 
     // TODO: Persist profile data (profile) to your user collection once a backend is available
     void profile;
   };
 
   const logout = () => {
+    void signOut(auth);
     setUser(null);
-    void persistUser(null);
   };
 
   useEffect(() => {
-    let isMounted = true;
+    let isActive = true;
 
-    const restoreUser = async () => {
-      if (!authStateFile) {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!isActive) return;
+
+      if (!firebaseUser) {
+        setUser(null);
         setInitializing(false);
         return;
       }
 
-      try {
-        if (!authStateFile.exists) {
-          setInitializing(false);
-          return;
-        }
-
-        const storedUser = JSON.parse(await authStateFile.text()) as AuthenticatedUser;
-
-        if (storedUser && isMounted) {
-          setUser(storedUser);
-        }
-      } catch (error) {
-        console.warn('Não foi possível restaurar a sessão anterior', error);
-      } finally {
-        if (isMounted) {
-          setInitializing(false);
-        }
+      if (!firebaseUser.emailVerified) {
+        await sendEmailVerification(firebaseUser);
+        setUser(null);
+        setInitializing(false);
+        return;
       }
-    };
 
-    void restoreUser();
+      const { role, displayName } = await upsertUserDocument(firebaseUser);
+      const idToken = await firebaseUser.getIdToken();
+
+      if (!isActive) return;
+
+      setUser({
+        email: firebaseUser.email ?? '',
+        uid: firebaseUser.uid,
+        role,
+        displayName,
+        idToken,
+        refreshToken: firebaseUser.refreshToken ?? undefined,
+      });
+      setInitializing(false);
+    });
 
     return () => {
-      isMounted = false;
+      isActive = false;
+      unsubscribe();
     };
   }, []);
 

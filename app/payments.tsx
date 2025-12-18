@@ -50,9 +50,9 @@ export default function PaymentsScreen() {
     [studentBalances],
   );
 
-  const handlePay = (paymentId: string) => {
+  const handlePay = async (paymentId: string) => {
     try {
-      const { session } = payOutstandingPayment(paymentId);
+      const { session } = await payOutstandingPayment(paymentId);
       Alert.alert(
         'Pagamento confirmado',
         `Checkout ${session.id} confirmado. Atualizamos seu saldo e recibo.`,

@@ -88,54 +88,60 @@ export default function ClassDetailsScreen() {
   const handleEnroll = () => {
     if (!currentStudentId) return;
     confirmAction('Confirmar inscrição', 'Tem certeza que deseja se inscrever nesta aula?', () => {
-      try {
-        const result = enrollStudentInClass(currentStudentId, trainingClass.id);
-        if (result.alreadyEnrolled) {
-          const message = 'Você já está inscrito nesta aula.';
-          setStatusMessage(message);
-          Alert.alert('Nenhuma alteração', message);
-          return;
-        }
+      void (async () => {
+        try {
+          const result = await enrollStudentInClass(currentStudentId, trainingClass.id);
+          if (result.alreadyEnrolled) {
+            const message = 'Você já está inscrito nesta aula.';
+            setStatusMessage(message);
+            Alert.alert('Nenhuma alteração', message);
+            return;
+          }
 
-        if (result.isWaitlist) {
-          const message = 'Capacidade cheia. Você entrou na lista de espera.';
+          if (result.isWaitlist) {
+            const message = 'Capacidade cheia. Você entrou na lista de espera.';
+            setStatusMessage(message);
+            Alert.alert('Inscrição processada', message);
+          } else {
+            const message = 'Inscrição confirmada! Você já tem vaga nesta turma.';
+            setStatusMessage(message);
+            Alert.alert('Inscrição confirmada', message);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Não foi possível concluir a inscrição.';
           setStatusMessage(message);
-          Alert.alert('Inscrição processada', message);
-        } else {
-          const message = 'Inscrição confirmada! Você já tem vaga nesta turma.';
-          setStatusMessage(message);
-          Alert.alert('Inscrição confirmada', message);
+          Alert.alert('Inscrição bloqueada', message);
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Não foi possível concluir a inscrição.';
-        setStatusMessage(message);
-        Alert.alert('Inscrição bloqueada', message);
-      }
+      })();
     });
   };
 
   const handleBookSession = (sessionId: string, referenceDate: Date) => {
     if (!currentStudentId) return;
 
-    try {
-      bookSessionForStudent(sessionId, currentStudentId);
-      const usage = getWeeklyUsageForStudent(currentStudentId, referenceDate);
-      const message = `Reserva confirmada. Restam ${usage.remaining} aulas esta semana.`;
-      setStatusMessage(message);
-      Alert.alert('Reserva confirmada', message);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Não foi possível reservar esta sessão.';
-      Alert.alert('Limite atingido', message);
-    }
+    void (async () => {
+      try {
+        await bookSessionForStudent(sessionId, currentStudentId);
+        const usage = getWeeklyUsageForStudent(currentStudentId, referenceDate);
+        const message = `Reserva confirmada. Restam ${usage.remaining} aulas esta semana.`;
+        setStatusMessage(message);
+        Alert.alert('Reserva confirmada', message);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Não foi possível reservar esta sessão.';
+        Alert.alert('Limite atingido', message);
+      }
+    })();
   };
 
   const handleUnregister = () => {
     if (!existingEnrollment) return;
     confirmAction('Cancelar inscrição', 'Deseja sair desta turma? Cancelaremos cobranças futuras.', () => {
-      cancelEnrollment(existingEnrollment.id);
-      const message = 'Inscrição cancelada. Você pode se inscrever novamente quando quiser.';
-      setStatusMessage(message);
-      Alert.alert('Inscrição cancelada', message);
+      void (async () => {
+        await cancelEnrollment(existingEnrollment.id);
+        const message = 'Inscrição cancelada. Você pode se inscrever novamente quando quiser.';
+        setStatusMessage(message);
+        Alert.alert('Inscrição cancelada', message);
+      })();
     });
   };
 
