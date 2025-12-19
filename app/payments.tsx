@@ -26,8 +26,10 @@ export default function PaymentsScreen() {
 
   useEffect(() => {
     if (user) {
-      const profile = ensureStudentProfile(user.email, user.displayName);
-      setStudentId(profile.id);
+      void (async () => {
+        const profile = await ensureStudentProfile(user.email, user.displayName);
+        setStudentId(user.uid ?? profile.id);
+      })();
     }
   }, [ensureStudentProfile, user]);
 

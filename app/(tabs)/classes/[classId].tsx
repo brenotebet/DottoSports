@@ -48,8 +48,10 @@ export default function ClassDetailsScreen() {
 
   useEffect(() => {
     if (user) {
-      const profile = ensureStudentProfile(user.email, user.displayName);
-      setCurrentStudentId(profile.id);
+      void (async () => {
+        const profile = await ensureStudentProfile(user.email, user.displayName);
+        setCurrentStudentId(user.uid ?? profile.id);
+      })();
     }
   }, [ensureStudentProfile, user]);
 
