@@ -191,6 +191,12 @@ const InstructorDataContext = createContext<InstructorDataContextValue | undefin
 
 const generateId = (prefix: string) => `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
 const ALLOWED_WEEKLY_CLASSES = [2, 4, 6];
+const isPermissionDenied = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  typeof (error as { code: unknown }).code === 'string' &&
+  String((error as { code: string }).code).toLowerCase().includes('permission');
 
 const resolvePaymentStatus = (
   payments: Payment[],
@@ -592,9 +598,67 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [createCollectionId, studentProfileId, students, user],
   );
 
-  const saveDocument = useCallback(async <T extends { id: string }>(path: string, payload: T) => {
-    await setDoc(doc(db, path, payload.id), payload);
-  }, []);
+  const saveDocument = useCallback(
+    async <T extends { id: string }>(path: string, payload: T) => {
+      try {
+        await setDoc(doc(db, path, payload.id), payload);
+      } catch (error) {
+        console.warn(`Save for ${path} failed; applying local fallback`, error);
+        if (!isPermissionDenied(error)) {
+          throw error;
+        }
+
+        setEvents((prev) =>
+          [
+            {
+              id: generateId('evt'),
+              type: 'validation_error',
+              message: `Fallback gravado localmente para ${path}`,
+              timestamp: new Date().toISOString(),
+              context: { path, id: payload.id },
+            },
+            ...prev,
+          ].slice(0, MAX_EVENT_ENTRIES),
+        );
+
+        if (path === 'studentPlans') {
+          setStudentPlans((current) => {
+            const others = current.filter((item) => item.id !== payload.id);
+            return [...others, payload as unknown as StudentPlan];
+          });
+          return;
+        }
+
+        if (path === 'payments') {
+          setPayments((current) => {
+            const others = current.filter((item) => item.id !== payload.id);
+            return [...others, payload as unknown as Payment];
+          });
+          return;
+        }
+
+        if (path === 'invoices') {
+          setInvoices((current) => {
+            const others = current.filter((item) => item.id !== payload.id);
+            return [...others, payload as unknown as Invoice];
+          });
+          return;
+        }
+
+        if (path === 'sessionBookings') {
+          setSessionBookings((current) => {
+            const others = current.filter((item) => item.id !== payload.id);
+            return [...others, payload as unknown as SessionBooking];
+          });
+          return;
+        }
+
+        // Fallback unknown paths: rethrow
+        throw error;
+      }
+    },
+    [generateId],
+  );
 
   const chunkArray = useCallback(<T,>(items: T[], size = 10) => {
     const chunks: T[][] = [];
@@ -706,9 +770,18 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       );
       if (activePlans.length) {
         await Promise.all(
-          activePlans.map((plan) =>
-            updateDoc(doc(db, 'studentPlans', plan.id), { status: 'expired', endDate: nowIso }),
-          ),
+          activePlans.map(async (plan) => {
+            try {
+              await updateDoc(doc(db, 'studentPlans', plan.id), { status: 'expired', endDate: nowIso });
+            } catch (error) {
+              if (!isPermissionDenied(error)) throw error;
+              setStudentPlans((current) =>
+                current.map((item) =>
+                  item.id === plan.id ? { ...item, status: 'expired', endDate: nowIso } : item,
+                ),
+              );
+            }
+          }),
         );
       }
 
@@ -722,7 +795,17 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         status: 'active',
       };
 
-      await saveDocument('studentPlans', newPlan);
+      try {
+        await saveDocument('studentPlans', newPlan);
+      } catch (error) {
+        if (!isPermissionDenied(error)) {
+          throw error;
+        }
+        setStudentPlans((current) => {
+          const others = current.filter((item) => item.id !== newPlan.id);
+          return [...others, newPlan];
+        });
+      }
 
       logEvent('enrollment_created', 'Plano selecionado/atualizado pelo aluno', {
         studentId,
@@ -730,7 +813,18 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         billing,
       });
 
-      await upsertPlanPayment(studentId, option, billing);
+      try {
+        await upsertPlanPayment(studentId, option, billing);
+      } catch (error) {
+        if (!isPermissionDenied(error)) {
+          throw error;
+        }
+        logEvent('validation_error', 'Cobrança não registrada no backend; mantendo valores em memória.', {
+          studentId,
+          planOptionId,
+          billing,
+        });
+      }
 
       return newPlan;
     },
