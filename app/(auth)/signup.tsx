@@ -1,5 +1,5 @@
-import { Link } from 'expo-router';
-import { useState } from 'react';
+import { Link, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -22,6 +22,7 @@ import { useAuth } from '@/providers/auth-provider';
 export default function SignupScreen() {
   const colorScheme = useColorScheme();
   const { signup } = useAuth();
+  const router = useRouter();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -36,6 +37,17 @@ export default function SignupScreen() {
 
   const validateBirthDate = (value: string) => /^\d{2}\/\d{2}\/\d{4}$/.test(value.trim());
   const normalizeCpf = (value: string) => value.replace(/\D/g, '');
+  const passwordRequirements = useMemo(
+    () => [
+      { label: '12 caracteres ou mais', passes: (value: string) => value.length >= 12 },
+      { label: 'Pelo menos uma letra maiúscula', passes: (value: string) => /[A-Z]/.test(value) },
+      { label: 'Pelo menos uma letra minúscula', passes: (value: string) => /[a-z]/.test(value) },
+      { label: 'Pelo menos um caractere especial', passes: (value: string) => /[^A-Za-z0-9]/.test(value) },
+    ],
+    [],
+  );
+
+  const passwordIsValid = (value: string) => passwordRequirements.every((rule) => rule.passes(value));
 
   const formatBirthDate = (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 8);
@@ -82,6 +94,8 @@ export default function SignupScreen() {
     const trimmedBirthDate = birthDate.trim();
     const normalizedCpf = normalizeCpf(cpf);
     const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
 
     if (!trimmedFirstName || !trimmedLastName || !trimmedBirthDate || !normalizedCpf || !trimmedEmail) {
       setError('Preencha todos os campos obrigatórios.');
@@ -98,7 +112,12 @@ export default function SignupScreen() {
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (!passwordIsValid(trimmedPassword)) {
+      setError('A senha deve ter pelo menos 12 caracteres, com letras maiúsculas, minúsculas e um caractere especial.');
+      return;
+    }
+
+    if (trimmedPassword !== trimmedConfirmPassword) {
       setError('As senhas precisam ser iguais.');
       return;
     }
@@ -110,13 +129,14 @@ export default function SignupScreen() {
     try {
       await signup({
         email: trimmedEmail,
-        password,
+        password: trimmedPassword,
         firstName: trimmedFirstName,
         lastName: trimmedLastName,
         birthDate: trimmedBirthDate,
         cpf: normalizedCpf,
       });
-      setSuccessMessage(`Enviamos um e-mail de verificação para ${trimmedEmail}. Confirme para acessar sua conta.`);
+      const confirmationMessage = `Conta criada! Confirme o e-mail enviado para ${trimmedEmail} e volte para entrar.`;
+      setSuccessMessage(confirmationMessage);
       setFirstName('');
       setLastName('');
       setBirthDate('');
@@ -124,6 +144,7 @@ export default function SignupScreen() {
       setEmail('');
       setPassword('');
       setConfirmPassword('');
+      router.replace({ pathname: '/(auth)/login', params: { notice: 'verify-email', email: trimmedEmail } });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Não foi possível criar sua conta.';
       setError(message);
@@ -229,6 +250,9 @@ export default function SignupScreen() {
                 value={password}
                 onChangeText={setPassword}
               />
+              <ThemedText style={[styles.helperText, { color: textColor }]}>
+                Use pelo menos 12 caracteres com letras maiúsculas, minúsculas e um símbolo.
+              </ThemedText>
 
               <TextInput
                 autoComplete="password"
@@ -307,6 +331,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     opacity: 0.8,
+  },
+  helperText: {
+    fontSize: 14,
+    lineHeight: 18,
+    opacity: 0.78,
   },
   input: {
     borderWidth: 1,
