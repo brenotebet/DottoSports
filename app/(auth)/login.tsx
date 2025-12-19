@@ -1,5 +1,5 @@
-import { Link, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
@@ -21,6 +21,7 @@ import { useAuth } from '@/providers/auth-provider';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ notice?: string; email?: string }>();
   const colorScheme = useColorScheme();
   const { login } = useAuth();
 
@@ -28,13 +29,51 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  const initialEmail = useMemo(() => {
+    const candidate = params.email;
+    return typeof candidate === 'string' ? candidate : '';
+  }, [params.email]);
+
+  useEffect(() => {
+    if (initialEmail) {
+      setEmail(initialEmail);
+    }
+  }, [initialEmail]);
+
+  useEffect(() => {
+    const notice = typeof params.notice === 'string' ? params.notice : '';
+    if (notice === 'verify-email') {
+      const targetEmail = typeof params.email === 'string' && params.email ? params.email : 'sua caixa de entrada';
+      setInfo(`Confirme o e-mail enviado para ${targetEmail} antes de acessar. Depois de verificar, volte e entre normalmente.`);
+    }
+  }, [params.email, params.notice]);
 
   const onSubmit = async () => {
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedEmail) {
+      setError('Informe seu e-mail para entrar.');
+      return;
+    }
+
+    if (!/\S+@\S+\.\S+/.test(trimmedEmail)) {
+      setError('Digite um e-mail válido.');
+      return;
+    }
+
+    if (!trimmedPassword) {
+      setError('Informe sua senha.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
     try {
-      await login(email, password);
+      await login(trimmedEmail, trimmedPassword);
       router.replace('/(tabs)');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Não foi possível entrar agora.';
@@ -62,6 +101,7 @@ export default function LoginScreen() {
                 Entrar
               </ThemedText>
               <ThemedText style={[styles.subtitle, { color: textColor }]}>Acesse com seu e-mail para continuar.</ThemedText>
+              {info ? <ThemedText style={[styles.infoText, { color: textColor }]}>{info}</ThemedText> : null}
 
               <TextInput
                 autoCapitalize="none"
@@ -153,6 +193,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     opacity: 0.8,
+  },
+  infoText: {
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
+    opacity: 0.85,
   },
   input: {
     borderWidth: 1,

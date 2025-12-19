@@ -42,17 +42,31 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  'auth/invalid-email': 'E-mail inválido. Verifique o formato e tente novamente.',
+  'auth/user-not-found': 'Nenhuma conta foi encontrada com este e-mail.',
+  'auth/wrong-password': 'Senha incorreta. Confira e tente novamente.',
+  'auth/weak-password': 'A senha não atende aos requisitos mínimos.',
+  'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
+  'auth/missing-password': 'Informe sua senha para continuar.',
+  'auth/network-request-failed': 'Não foi possível conectar. Verifique sua internet e tente novamente.',
+};
 const userDocRef = (uid: string) => doc(db, 'users', uid);
 const VERIFICATION_THROTTLE_MS = 5 * 60 * 1000;
 
 const resolveFriendlyAuthMessage = (error: unknown, fallback: string) => {
   const maybeCode = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
-  if (maybeCode.includes('too-many-requests')) {
+  const normalizedCode = maybeCode.toLowerCase();
+  if (normalizedCode.includes('too-many-requests')) {
     return 'Detectamos muitas tentativas. Aguarde alguns minutos antes de tentar novamente.';
   }
 
+  if (AUTH_ERROR_MESSAGES[normalizedCode]) {
+    return AUTH_ERROR_MESSAGES[normalizedCode];
+  }
+
   if (error instanceof Error) {
-    return error.message;
+    return AUTH_ERROR_MESSAGES[normalizedCode] ?? error.message;
   }
 
   return fallback;

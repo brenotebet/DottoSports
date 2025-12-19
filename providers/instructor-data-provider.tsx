@@ -1044,12 +1044,31 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [classes, enrollments],
   );
 
+  const resolveRosterStudent = useCallback(
+    (enrollment: Enrollment): StudentProfile => {
+      const student = students.find((item) => item.id === enrollment.studentId);
+      if (student) return student;
+
+      const suffix = enrollment.studentId.slice(-4) || enrollment.studentId;
+      return {
+        id: enrollment.studentId,
+        userId: enrollment.studentId,
+        fullName: `Aluno inscrito #${suffix}`,
+        phone: '',
+        birthDate: '',
+        experienceLevel: 'beginner',
+        goals: [],
+        emergencyContact: { name: 'Contato não disponível', phone: '' },
+      };
+    },
+    [students],
+  );
+
   const rosterByClass = useMemo(() => {
     return enrollments.reduce<Record<string, RosterEntry[]>>((acc, enrollment) => {
       if (enrollment.status === 'cancelled') return acc;
 
-      const student = students.find((item) => item.id === enrollment.studentId);
-      if (!student) return acc;
+      const student = resolveRosterStudent(enrollment);
 
       const existingAttendance = attendance.find(
         (entry) => entry.enrollmentId === enrollment.id,
@@ -1066,7 +1085,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       acc[enrollment.classId] = [...(acc[enrollment.classId] ?? []), entry];
       return acc;
     }, {});
-  }, [attendance, enrollments, invoices, payments, students]);
+  }, [attendance, enrollments, invoices, payments, resolveRosterStudent]);
 
   const outstandingBalances = useMemo(() => {
     const cancelledEnrollmentIds = new Set(
