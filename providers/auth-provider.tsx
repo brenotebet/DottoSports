@@ -43,6 +43,20 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const userDocRef = (uid: string) => doc(db, 'users', uid);
+const VERIFICATION_THROTTLE_MS = 5 * 60 * 1000;
+
+const resolveFriendlyAuthMessage = (error: unknown, fallback: string) => {
+  const maybeCode = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
+  if (maybeCode.includes('too-many-requests')) {
+    return 'Detectamos muitas tentativas. Aguarde alguns minutos antes de tentar novamente.';
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return fallback;
+};
 
 const upsertUserDocument = async (firebaseUser: User, roleHint?: UserRole, displayNameHint?: string) => {
   const ref = userDocRef(firebaseUser.uid);
@@ -71,45 +85,78 @@ const upsertUserDocument = async (firebaseUser: User, roleHint?: UserRole, displ
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [lastVerificationRequest, setLastVerificationRequest] = useState<number | null>(null);
 
-  const login = async (email: string, password: string) => {
-    const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
-    const firebaseUser = credential.user;
-
-    if (!firebaseUser.emailVerified) {
-      await sendEmailVerification(firebaseUser);
-      throw new Error('Confirme seu e-mail antes de continuar. Enviamos um novo link de verificação.');
+  const maybeSendVerification = async (firebaseUser: User, { force = false }: { force?: boolean } = {}) => {
+    const now = Date.now();
+    const withinThrottle = lastVerificationRequest && now - lastVerificationRequest < VERIFICATION_THROTTLE_MS;
+    if (withinThrottle && !force) {
+      return { sent: false, reason: 'recent' } as const;
     }
 
-    const { role, displayName } = await upsertUserDocument(firebaseUser);
-    const idToken = await firebaseUser.getIdToken();
-    const authenticated: AuthenticatedUser = {
-      email: firebaseUser.email ?? email,
-      uid: firebaseUser.uid,
-      role,
-      displayName,
-      idToken,
-      refreshToken: firebaseUser.refreshToken ?? undefined,
-    };
+    try {
+      await sendEmailVerification(firebaseUser);
+      setLastVerificationRequest(now);
+      return { sent: true } as const;
+    } catch (error) {
+      const friendly = resolveFriendlyAuthMessage(
+        error,
+        'Não foi possível enviar o e-mail de verificação agora.',
+      );
+      throw new Error(friendly);
+    }
+  };
 
-    setUser(authenticated);
+  const login = async (email: string, password: string) => {
+    try {
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const firebaseUser = credential.user;
+
+      if (!firebaseUser.emailVerified) {
+        await maybeSendVerification(firebaseUser);
+        throw new Error(
+          'Confirme seu e-mail antes de continuar. Reenviamos (ou usamos o último link gerado) para verificar sua conta.',
+        );
+      }
+
+      const { role, displayName } = await upsertUserDocument(firebaseUser);
+      const idToken = await firebaseUser.getIdToken();
+      const authenticated: AuthenticatedUser = {
+        email: firebaseUser.email ?? email,
+        uid: firebaseUser.uid,
+        role,
+        displayName,
+        idToken,
+        refreshToken: firebaseUser.refreshToken ?? undefined,
+      };
+
+      setUser(authenticated);
+    } catch (error) {
+      const friendly = resolveFriendlyAuthMessage(error, 'Não foi possível entrar agora.');
+      throw new Error(friendly);
+    }
   };
 
   const signup = async ({ email, password, ...profile }: SignupPayload) => {
-    const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-    const firebaseUser = credential.user;
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const firebaseUser = credential.user;
 
-    const displayName = `${profile.firstName} ${profile.lastName}`.trim();
+      const displayName = `${profile.firstName} ${profile.lastName}`.trim();
 
-    if (displayName) {
-      await updateProfile(firebaseUser, { displayName });
+      if (displayName) {
+        await updateProfile(firebaseUser, { displayName });
+      }
+
+      await maybeSendVerification(firebaseUser, { force: true });
+      await upsertUserDocument(firebaseUser, 'STUDENT', displayName);
+
+      // TODO: Persist profile data (profile) to your user collection once a backend is available
+      void profile;
+    } catch (error) {
+      const friendly = resolveFriendlyAuthMessage(error, 'Não foi possível criar sua conta.');
+      throw new Error(friendly);
     }
-
-    await sendEmailVerification(firebaseUser);
-    await upsertUserDocument(firebaseUser, 'STUDENT', displayName);
-
-    // TODO: Persist profile data (profile) to your user collection once a backend is available
-    void profile;
   };
 
   const logout = () => {
@@ -130,7 +177,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (!firebaseUser.emailVerified) {
-        await sendEmailVerification(firebaseUser);
+        try {
+          await maybeSendVerification(firebaseUser);
+        } catch (error) {
+          console.warn('Verification e-mail skipped during auth restoration', error);
+        }
         setUser(null);
         setInitializing(false);
         return;

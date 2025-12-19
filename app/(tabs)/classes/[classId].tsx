@@ -14,7 +14,7 @@ export const options = { headerShown: false };
 
 export default function ClassDetailsScreen() {
   const { classId } = useLocalSearchParams<{ classId: string }>();
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
   const {
     classes,
     rosterByClass,
@@ -33,6 +33,7 @@ export default function ClassDetailsScreen() {
   const [statusMessage, setStatusMessage] = useState('');
   const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
+  const isInstructorView = hasRole(['INSTRUCTOR', 'ADMIN']);
 
   const currentWeekUsage = useMemo(
     () => (currentStudentId ? getWeeklyUsageForStudent(currentStudentId) : null),
@@ -284,7 +285,13 @@ export default function ClassDetailsScreen() {
               <View key={entry.enrollment.id} style={styles.rosterRow}>
                 <View style={{ gap: 4 }}>
                   <ThemedText type="defaultSemiBold">{entry.student.fullName}</ThemedText>
-                  <ThemedText style={styles.muted}>{entry.paymentLabel}</ThemedText>
+                  <ThemedText style={styles.muted}>
+                    {isInstructorView
+                      ? entry.paymentLabel
+                      : entry.enrollment.status === 'waitlist'
+                        ? 'Lista de espera'
+                        : 'Inscrição confirmada'}
+                  </ThemedText>
                 </View>
                 <ThemedView style={styles.badge}>
                   <ThemedText style={styles.badgeText}>
