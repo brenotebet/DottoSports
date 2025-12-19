@@ -650,20 +650,12 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
     const fetchStudentOwned = async <T extends { id: string }>(path: string, setter: (items: T[]) => void) => {
       const baseRef = collection(db, path);
-      const requests: Array<Promise<ReturnType<typeof getDocs>>> = [];
 
-      if (user?.uid) {
-        requests.push(getDocs(query(baseRef, where('studentUid', '==', user.uid))));
-      }
-
-      if (studentProfileId) {
-        requests.push(getDocs(query(baseRef, where('studentId', '==', studentProfileId))));
-      }
+      const uidPromise = user?.uid ? getDocs(query(baseRef, where('studentUid', '==', user.uid))) : null;
+      const legacyPromise = studentProfileId ? getDocs(query(baseRef, where('studentId', '==', studentProfileId))) : null;
 
       try {
-        const [uidSnap, legacySnap] = await Promise.all([requests[0], requests[1]].filter(Boolean) as Array<
-          Promise<ReturnType<typeof getDocs>>
-        >);
+        const [uidSnap, legacySnap] = await Promise.all([uidPromise, legacyPromise]);
         const uidDocs = uidSnap ? uidSnap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id)) : [];
         const legacyDocs = legacySnap ? legacySnap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id)) : [];
         setter(mergeById(uidDocs, legacyDocs));
