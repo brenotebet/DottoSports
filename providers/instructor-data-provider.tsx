@@ -455,13 +455,13 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       subscribe<UserAccount & { displayName?: string }>('users', setUsers);
     } else {
       const studentScope = studentProfileId ?? '__none__';
-      subscribe<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]);
+      subscribe<Enrollment>('enrollments', setEnrollments);
       subscribe<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]);
       subscribe<SessionBooking>('sessionBookings', setSessionBookings, [where('studentId', '==', studentScope)]);
       subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
         where('studentId', '==', studentScope),
       ]);
-      subscribe<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]);
+      subscribe<StudentProfile>('studentProfiles', setStudents);
       subscribe<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]);
       subscribe<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]);
       subscribe<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]);
@@ -525,7 +525,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     } else {
       const studentScope = studentProfileId ?? '__none__';
       baseCollections.push(
-        fetchCollection<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]),
+        fetchCollection<Enrollment>('enrollments', setEnrollments),
         fetchCollection<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]),
         fetchCollection<SessionBooking>('sessionBookings', setSessionBookings, [
           where('studentId', '==', studentScope),
@@ -533,7 +533,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
           where('studentId', '==', studentScope),
         ]),
-        fetchCollection<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]),
+        fetchCollection<StudentProfile>('studentProfiles', setStudents),
         fetchCollection<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]),
         fetchCollection<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]),
         fetchCollection<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]),
@@ -611,9 +611,9 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const getActivePlanForStudent = useCallback(
     (studentId: string) =>
-      studentPlans.find(
-        (plan) => plan.studentId === studentId && plan.status === 'active',
-      ),
+      studentPlans
+        .filter((plan) => plan.studentId === studentId && plan.status === 'active')
+        .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0],
     [studentPlans],
   );
 
@@ -699,12 +699,25 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       }
 
       const now = new Date();
+      const nowIso = now.toISOString();
+
+      const activePlans = studentPlans.filter(
+        (plan) => plan.studentId === studentId && plan.status === 'active',
+      );
+      if (activePlans.length) {
+        await Promise.all(
+          activePlans.map((plan) =>
+            updateDoc(doc(db, 'studentPlans', plan.id), { status: 'expired', endDate: nowIso }),
+          ),
+        );
+      }
+
       const newPlan: StudentPlan = {
         id: createCollectionId('studentPlans'),
         studentId,
         planOptionId,
         billing,
-        startDate: now.toISOString(),
+        startDate: nowIso,
         endDate: new Date(now.getFullYear(), now.getMonth() + option.durationMonths, now.getDate()).toISOString(),
         status: 'active',
       };
@@ -721,7 +734,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       return newPlan;
     },
-    [createCollectionId, logEvent, planOptions, saveDocument, upsertPlanPayment],
+    [createCollectionId, logEvent, planOptions, saveDocument, studentPlans, upsertPlanPayment],
   );
 
   const getWeeklyUsageForStudent = useCallback(
@@ -831,7 +844,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const enrollStudentInClass = useCallback(
     async (studentId: string, classId: string) => {
       const activePlan = getActivePlanForStudent(studentId);
-      const weeklyUsage = getWeeklyUsageForStudent(studentId);
+      const nextSessionForClass = sessions
+        .filter((session) => session.classId === classId)
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+      const referenceDate = nextSessionForClass ? new Date(nextSessionForClass.startTime) : new Date();
+      const weeklyUsage = getWeeklyUsageForStudent(studentId, referenceDate);
 
       if (!activePlan) {
         const message = 'Um plano ativo é necessário para se inscrever em aulas.';
@@ -909,7 +926,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       return { enrollment, isWaitlist, alreadyEnrolled: false };
     },
-    [classes, createCollectionId, enrollments, getActivePlanForStudent, getWeeklyUsageForStudent, logEvent, saveDocument],
+    [
+      classes,
+      createCollectionId,
+      enrollments,
+      getActivePlanForStudent,
+      getWeeklyUsageForStudent,
+      logEvent,
+      saveDocument,
+      sessions,
+    ],
   );
 
   const getCapacityUsage = useCallback(
