@@ -7,7 +7,6 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
-import { instructorProfiles, seedAccounts } from '@/constants/seed-data';
 
 const weekDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const monthNames = [
@@ -40,16 +39,15 @@ const dayIndexMap: Record<string, number> = {
 
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
-  const { sessions, classes } = useInstructorData();
+  const { sessions, classes, instructorProfiles } = useInstructorData();
   const router = useRouter();
 
   const instructorNameFor = useCallback((instructorId?: string) => {
     if (!instructorId) return 'Coach';
     const profile = instructorProfiles.find((item) => item.id === instructorId || item.userId === instructorId);
     if (profile) return profile.fullName;
-    const account = seedAccounts.find((item) => item.id === instructorId);
-    return account?.displayName ?? account?.email ?? 'Coach';
-  }, []);
+    return 'Coach';
+  }, [instructorProfiles]);
 
   const today = useMemo(() => {
     const now = new Date();

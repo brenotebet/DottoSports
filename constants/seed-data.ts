@@ -18,49 +18,7 @@ import type {
   StudentPlan,
   StudentProfile,
   TrainingClass,
-  UserAccount,
-  UserRole,
 } from './schema';
-
-type SeedAccount = UserAccount & {
-  password: string;
-  displayName: string;
-};
-
-// Sample accounts are not seeded automatically because they require real Firebase Auth UIDs.
-// Create them in Firebase Auth first; the AuthProvider will populate /users/{uid} on login.
-export const seedAccounts: SeedAccount[] = [
-  {
-    id: 'user-admin-1',
-    email: 'admin@dottosports.test',
-    password: 'Admin@123',
-    role: 'ADMIN',
-    status: 'active',
-    createdAt: '2024-01-01T12:00:00Z',
-    updatedAt: '2024-01-05T12:00:00Z',
-    displayName: 'Admin Pro',
-  },
-  {
-    id: 'user-instructor-1',
-    email: 'brenotebet@live.com',
-    password: 'Coach@123',
-    role: 'INSTRUCTOR',
-    status: 'active',
-    createdAt: '2024-01-02T12:00:00Z',
-    updatedAt: '2024-01-06T12:00:00Z',
-    displayName: 'Coach Marina',
-  },
-  {
-    id: 'user-student-1',
-    email: 'aluno@dottosports.test',
-    password: 'Aluno@123',
-    role: 'STUDENT',
-    status: 'active',
-    createdAt: '2024-01-03T12:00:00Z',
-    updatedAt: '2024-01-07T12:00:00Z',
-    displayName: 'Cliente Teste',
-  },
-];
 
 export const instructorProfiles: InstructorProfile[] = [
   {
@@ -375,18 +333,4 @@ export const seededDatabase: DatabaseSchema = {
   studentPlans: [],
   sessionBookings: [],
   creditReinstatements: [],
-};
-
-export const resolveSeedRole = (email: string): UserRole | null => {
-  const match = seedAccounts.find(
-    (account) => account.email.toLowerCase() === email.toLowerCase(),
-  );
-  return match?.role ?? null;
-};
-
-export const resolveSeedDisplayName = (email: string): string | null => {
-  const match = seedAccounts.find(
-    (account) => account.email.toLowerCase() === email.toLowerCase(),
-  );
-  return match?.displayName ?? null;
 };
