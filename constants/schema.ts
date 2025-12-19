@@ -74,6 +74,7 @@ export type PlanOption = {
 export type StudentPlan = {
   id: string;
   studentUid: string;
+  studentId?: string;
   planOptionId: string;
   billing: 'upfront' | 'recurring';
   startDate: string;
@@ -84,6 +85,7 @@ export type StudentPlan = {
 export type SessionBooking = {
   id: string;
   studentUid: string;
+  studentId?: string;
   sessionId: string;
   weekStart: string;
   createdAt: string;
@@ -93,6 +95,7 @@ export type SessionBooking = {
 export type CreditReinstatement = {
   id: string;
   studentUid: string;
+  studentId?: string;
   weekStart: string;
   amount: number;
   createdAt: string;
@@ -113,6 +116,7 @@ export type ClassSession = {
 export type Enrollment = {
   id: string;
   studentUid: string;
+  studentId?: string;
   classId: string;
   status: 'active' | 'waitlist' | 'cancelled';
   createdAt: string;
@@ -131,6 +135,7 @@ export type Attendance = {
 export type Payment = {
   id: string;
   studentUid: string;
+  studentId?: string;
   enrollmentId?: string;
   amount: number;
   currency: 'USD' | 'BRL' | 'EUR';
@@ -211,6 +216,7 @@ export type EvaluationQuestionnaire = {
 export type Evaluation = {
   id: string;
   studentUid: string;
+  studentId?: string;
   date: string;
   questionnaire: EvaluationQuestionnaire;
   notes?: string;
@@ -219,6 +225,7 @@ export type Evaluation = {
 export type Goal = {
   id: string;
   studentUid: string;
+  studentId?: string;
   target: string;
   metric: string;
   startDate: string;
