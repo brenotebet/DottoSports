@@ -11,7 +11,6 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 import type { UserRole } from '@/constants/schema';
-import { resolveSeedDisplayName, resolveSeedRole } from '@/constants/seed-data';
 import { auth, db } from '@/services/firebase';
 
 export type AuthenticatedUser = {
@@ -50,9 +49,8 @@ const upsertUserDocument = async (firebaseUser: User, roleHint?: UserRole, displ
   const existing = await getDoc(ref);
   const now = new Date().toISOString();
   const email = firebaseUser.email ?? '';
-  const resolvedRole = (existing.data()?.role as UserRole | undefined) ?? resolveSeedRole(email) ?? roleHint ?? 'STUDENT';
-  const resolvedDisplayName =
-    existing.data()?.displayName ?? displayNameHint ?? resolveSeedDisplayName(email) ?? firebaseUser.displayName ?? email;
+  const resolvedRole = (existing.data()?.role as UserRole | undefined) ?? roleHint ?? 'STUDENT';
+  const resolvedDisplayName = existing.data()?.displayName ?? displayNameHint ?? firebaseUser.displayName ?? email;
 
   await setDoc(
     ref,
@@ -108,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     await sendEmailVerification(firebaseUser);
-    await upsertUserDocument(firebaseUser, resolveSeedRole(email) ?? 'STUDENT', displayName);
+    await upsertUserDocument(firebaseUser, 'STUDENT', displayName);
 
     // TODO: Persist profile data (profile) to your user collection once a backend is available
     void profile;

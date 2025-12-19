@@ -7,9 +7,7 @@ import { db } from '@/services/firebase';
 
 type SeedableCollection = keyof DatabaseSchema;
 
-// Seeded accounts and profiles require real Firebase Auth users. Create test accounts in Firebase Auth
-// and let AuthProvider create /users/{uid} documents on first login. Only seed content collections
-// that are not tied to an auth-generated identifier.
+// Only seed content collections that are not tied to an auth-generated identifier.
 const seedCollections: Array<{ key: SeedableCollection; data: any[] }> = [
   { key: 'classes', data: seedData.classes },
   { key: 'sessions', data: seedData.sessions },
