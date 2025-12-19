@@ -358,31 +358,22 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         throw new Error('Você precisa estar autenticado para localizar um perfil de aluno.');
       }
 
+      if (studentProfileId) {
+        return studentProfileId;
+      }
+
       const studentById = students.find((profile) => profile.id === target);
       if (studentById) return studentById.id;
 
       const studentByUser = students.find((profile) => profile.userId === target);
       if (studentByUser) return studentByUser.id;
 
-      try {
-        const directRef = doc(db, 'studentProfiles', target);
-        const directSnap = await getDoc(directRef);
-        if (directSnap.exists()) {
-          const data = directSnap.data() as StudentProfile;
-          if (data.userId) {
-            return directSnap.id;
-          }
-        }
-      } catch (error) {
-        console.warn('Direct student profile lookup failed; attempting resolver.', error);
-      }
-
       const resolved = await resolveStudentProfileId(target);
       if (resolved) return resolved;
 
       throw new Error('Perfil de aluno não encontrado para o usuário atual.');
     },
-    [students, user],
+    [studentProfileId, students, user],
   );
 
   const normalizeStudentProfileId = useCallback(
@@ -505,17 +496,28 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       subscribe<Goal>('goals', setGoals);
       subscribe<UserAccount & { displayName?: string }>('users', setUsers);
     } else {
-      const studentScope = studentProfileId ?? '__none__';
-      subscribe<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]);
-      subscribe<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]);
-      subscribe<SessionBooking>('sessionBookings', setSessionBookings, [where('studentId', '==', studentScope)]);
-      subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
-        where('studentId', '==', studentScope),
-      ]);
       subscribe<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]);
-      subscribe<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]);
-      subscribe<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]);
-      subscribe<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]);
+
+      if (studentProfileId) {
+        const studentScope = studentProfileId;
+        subscribe<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]);
+        subscribe<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]);
+        subscribe<SessionBooking>('sessionBookings', setSessionBookings, [where('studentId', '==', studentScope)]);
+        subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
+          where('studentId', '==', studentScope),
+        ]);
+        subscribe<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]);
+        subscribe<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]);
+        subscribe<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]);
+      } else {
+        setEnrollments([]);
+        setStudentPlans([]);
+        setSessionBookings([]);
+        setCreditReinstatements([]);
+        setPayments([]);
+        setEvaluations([]);
+        setGoals([]);
+      }
       void syncCurrentUserRecord();
     }
 
@@ -574,21 +576,31 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         fetchCollection<UserAccount & { displayName?: string }>('users', setUsers),
       );
     } else {
-      const studentScope = studentProfileId ?? '__none__';
-      baseCollections.push(
-        fetchCollection<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]),
-        fetchCollection<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]),
-        fetchCollection<SessionBooking>('sessionBookings', setSessionBookings, [
-          where('studentId', '==', studentScope),
-        ]),
-        fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
-          where('studentId', '==', studentScope),
-        ]),
-        fetchCollection<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]),
-        fetchCollection<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]),
-        fetchCollection<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]),
-        fetchCollection<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]),
-      );
+      baseCollections.push(fetchCollection<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]));
+      if (studentProfileId) {
+        const studentScope = studentProfileId;
+        baseCollections.push(
+          fetchCollection<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]),
+          fetchCollection<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]),
+          fetchCollection<SessionBooking>('sessionBookings', setSessionBookings, [
+            where('studentId', '==', studentScope),
+          ]),
+          fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
+            where('studentId', '==', studentScope),
+          ]),
+          fetchCollection<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]),
+          fetchCollection<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]),
+          fetchCollection<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]),
+        );
+      } else {
+        setEnrollments([]);
+        setStudentPlans([]);
+        setSessionBookings([]);
+        setCreditReinstatements([]);
+        setPayments([]);
+        setEvaluations([]);
+        setGoals([]);
+      }
       baseCollections.push(syncCurrentUserRecord());
     }
 
@@ -602,14 +614,14 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isInstructor || !user) return;
-    if (studentProfileId === undefined) return;
+    if (!studentProfileId) return;
 
     console.log('[StudentDebug]', {
       uid: user.uid,
       studentProfileId,
-      planQuery: ['studentPlans', 'studentId ==', studentProfileId ?? '__none__'],
-      evaluationQuery: ['evaluations', 'studentId ==', studentProfileId ?? '__none__'],
-      goalQuery: ['goals', 'studentId ==', studentProfileId ?? '__none__'],
+      planQuery: ['studentPlans', 'studentId ==', studentProfileId],
+      evaluationQuery: ['evaluations', 'studentId ==', studentProfileId],
+      goalQuery: ['goals', 'studentId ==', studentProfileId],
     });
   }, [isInstructor, studentProfileId, user]);
 

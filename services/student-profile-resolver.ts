@@ -3,6 +3,7 @@ import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firesto
 import { db } from './firebase';
 
 const studentProfileCache = new Map<string, string | null>();
+const fastPathBlocked = new Set<string>();
 
 /**
  * Resolve a student profile id for a given auth UID.
@@ -14,18 +15,21 @@ export const resolveStudentProfileId = async (uid: string): Promise<string | nul
     return studentProfileCache.get(uid) ?? null;
   }
 
-  try {
-    const directRef = doc(db, 'studentProfiles', uid);
-    const directSnap = await getDoc(directRef);
-    if (directSnap.exists()) {
-      const data = directSnap.data() as { userId?: string };
-      if (data?.userId === uid) {
-        studentProfileCache.set(uid, directSnap.id);
-        return directSnap.id;
+  if (!fastPathBlocked.has(uid)) {
+    try {
+      const directRef = doc(db, 'studentProfiles', uid);
+      const directSnap = await getDoc(directRef);
+      if (directSnap.exists()) {
+        const data = directSnap.data() as { userId?: string };
+        if (data?.userId === uid) {
+          studentProfileCache.set(uid, directSnap.id);
+          return directSnap.id;
+        }
       }
+    } catch (error) {
+      fastPathBlocked.add(uid);
+      console.warn('Fast-path studentProfiles/{uid} lookup failed, continuing to query.', error);
     }
-  } catch (error) {
-    console.warn('Fast-path studentProfiles/{uid} lookup failed, continuing to query.', error);
   }
 
   try {
