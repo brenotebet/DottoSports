@@ -608,18 +608,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           throw error;
         }
 
-        setEvents((prev) =>
-          [
-            {
-              id: generateId('evt'),
-              type: 'validation_error',
-              message: `Fallback gravado localmente para ${path}`,
-              timestamp: new Date().toISOString(),
-              context: { path, id: payload.id },
-            },
-            ...prev,
-          ].slice(0, MAX_EVENT_ENTRIES),
-        );
+        setEvents((prev) => {
+          const fallbackEvent: SystemEvent = {
+            id: generateId('evt'),
+            type: 'validation_error',
+            message: `Fallback gravado localmente para ${path}`,
+            timestamp: new Date().toISOString(),
+            context: { path, id: payload.id },
+          };
+          return [fallbackEvent, ...prev].slice(0, MAX_EVENT_ENTRIES);
+        });
 
         if (path === 'studentPlans') {
           setStudentPlans((current) => {
