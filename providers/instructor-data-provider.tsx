@@ -461,13 +461,13 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       subscribe<UserAccount & { displayName?: string }>('users', setUsers);
     } else {
       const studentScope = studentProfileId ?? '__none__';
-      subscribe<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]);
+      subscribe<Enrollment>('enrollments', setEnrollments);
       subscribe<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]);
       subscribe<SessionBooking>('sessionBookings', setSessionBookings, [where('studentId', '==', studentScope)]);
       subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
         where('studentId', '==', studentScope),
       ]);
-      subscribe<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]);
+      subscribe<StudentProfile>('studentProfiles', setStudents);
       subscribe<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]);
       subscribe<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]);
       subscribe<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]);
@@ -531,7 +531,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     } else {
       const studentScope = studentProfileId ?? '__none__';
       baseCollections.push(
-        fetchCollection<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]),
+        fetchCollection<Enrollment>('enrollments', setEnrollments),
         fetchCollection<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]),
         fetchCollection<SessionBooking>('sessionBookings', setSessionBookings, [
           where('studentId', '==', studentScope),
@@ -539,7 +539,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
           where('studentId', '==', studentScope),
         ]),
-        fetchCollection<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]),
+        fetchCollection<StudentProfile>('studentProfiles', setStudents),
         fetchCollection<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]),
         fetchCollection<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]),
         fetchCollection<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]),
