@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userRole() {
+      return isSignedIn()
+        ? get(/databases/{database}/documents/users/{request.auth.uid}).data.role
+        : null;
+    }
+
+    function isInstructor() {
+      let role = userRole();
+      return role == 'INSTRUCTOR' || role == 'ADMIN';
+    }
+
+    function studentIdFromRequestOrResource() {
+      return (request.resource != null && request.resource.data.studentId != null)
+        ? request.resource.data.studentId
+        : (resource != null ? resource.data.studentId : null);
+    }
+
+    function studentUidFromRequestOrResource() {
+      return (request.resource != null && request.resource.data.studentUid != null)
+        ? request.resource.data.studentUid
+        : (resource != null ? resource.data.studentUid : null);
+    }
+
+    function isStudentOwner(studentId) {
+      return isSignedIn()
+        && studentId != null
+        && get(/databases/{database}/documents/studentProfiles/{studentId}).data.userId == request.auth.uid;
+    }
+
+    function isStudentUidOwner(studentUid) {
+      return isSignedIn() && studentUid != null && studentUid == request.auth.uid;
+    }
+
+    function isStudentOrInstructor() {
+      return isInstructor()
+        || isStudentUidOwner(studentUidFromRequestOrResource())
+        || isStudentOwner(studentIdFromRequestOrResource());
+    }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isInstructor() || (isSignedIn() && request.auth.uid == userId);
+    }
+
+    match /instructorProfiles/{profileId} {
+      allow read: if isSignedIn();
+      allow write: if isInstructor();
+    }
+
+    match /studentProfiles/{profileId} {
+      allow read: if isInstructor() || isStudentUidOwner(profileId) || isStudentOwner(profileId);
+      allow write: if isInstructor() || isStudentUidOwner(profileId) || isStudentOwner(profileId);
+    }
+
+    match /classes/{classId} {
+      allow read: if true;
+      allow write: if isInstructor();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow write: if isInstructor();
+    }
+
+    match /planOptions/{optionId} {
+      allow read: if true;
+      allow write: if isInstructor();
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow read, write: if isStudentOrInstructor();
+    }
+
+    match /studentPlans/{planId} {
+      allow read, write: if isStudentOrInstructor();
+    }
+
+    match /sessionBookings/{bookingId} {
+      allow read, write: if isStudentOrInstructor();
+    }
+
+    match /creditReinstatements/{creditId} {
+      allow read, write: if isStudentOrInstructor();
+    }
+
+    match /payments/{paymentId} {
+      allow read, write: if isStudentOrInstructor();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isInstructor();
+      allow write: if isInstructor();
+    }
+
+    match /paymentIntents/{intentId} {
+      allow read, write: if isInstructor();
+    }
+
+    match /paymentSessions/{sessionId} {
+      allow read, write: if isInstructor();
+    }
+
+    match /receipts/{receiptId} {
+      allow read, write: if isInstructor();
+    }
+
+    match /settlements/{settlementId} {
+      allow read, write: if isInstructor();
+    }
+
+    match /evaluations/{evaluationId} {
+      allow read, write: if isStudentOrInstructor();
+    }
+
+    match /goals/{goalId} {
+      allow read, write: if isStudentOrInstructor();
+    }
+
+    match /attendance/{attendanceId} {
+      allow read: if isInstructor();
+      allow write: if isInstructor();
+    }
+  }
+}
