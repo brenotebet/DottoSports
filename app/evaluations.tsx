@@ -26,8 +26,10 @@ export default function StudentEvaluationsScreen() {
 
   useEffect(() => {
     if (user) {
-      const profile = getStudentProfileForEmail(user.email, user.displayName);
-      setStudentId(profile.id);
+      void (async () => {
+        const profile = await getStudentProfileForEmail(user.email, user.displayName);
+        setStudentId(user.uid ?? profile.id);
+      })();
     }
   }, [getStudentProfileForEmail, user]);
 
