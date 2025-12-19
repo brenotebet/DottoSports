@@ -1,4 +1,3 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   collection,
   deleteDoc,
@@ -14,27 +13,28 @@ import {
   type DocumentData,
   type Unsubscribe,
 } from 'firebase/firestore';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import type {
   Attendance,
   ClassSession,
+  CreditReinstatement,
   Enrollment,
   Evaluation,
   Goal,
+  InstructorProfile,
   Invoice,
   Payment,
   PaymentIntent,
   PaymentSession,
+  PlanOption,
   Receipt,
+  SessionBooking,
   Settlement,
-  InstructorProfile,
-  UserAccount,
+  StudentPlan,
   StudentProfile,
   TrainingClass,
-  PlanOption,
-  StudentPlan,
-  SessionBooking,
-  CreditReinstatement,
+  UserAccount,
 } from '@/constants/schema';
 import { db } from '@/services/firebase';
 import { resolveStudentProfileId } from '@/services/student-profile-resolver';
@@ -499,16 +499,16 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       subscribe<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]);
 
       if (studentProfileId) {
-        const studentScope = studentProfileId;
-        subscribe<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]);
-        subscribe<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]);
-        subscribe<SessionBooking>('sessionBookings', setSessionBookings, [where('studentId', '==', studentScope)]);
+        const studentScope = user.uid;
+        subscribe<Enrollment>('enrollments', setEnrollments, [where('studentUid', '==', user.uid)]);
+        subscribe<StudentPlan>('studentPlans', setStudentPlans, [where('studentUid', '==', user.uid)]);
+        subscribe<SessionBooking>('sessionBookings', setSessionBookings, [where('studentUid', '==', user.uid)]);
         subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
-          where('studentId', '==', studentScope),
+          where('studentUid', '==', user.uid),
         ]);
-        subscribe<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]);
-        subscribe<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]);
-        subscribe<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]);
+        subscribe<Payment>('payments', setPayments, [where('studentUid', '==', user.uid)]);
+        subscribe<Evaluation>('evaluations', setEvaluations, [where('studentUid', '==', user.uid)]);
+        subscribe<Goal>('goals', setGoals, [where('studentUid', '==', user.uid)]);
       } else {
         setEnrollments([]);
         setStudentPlans([]);
@@ -578,19 +578,19 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     } else {
       baseCollections.push(fetchCollection<StudentProfile>('studentProfiles', setStudents, [where('userId', '==', user.uid)]));
       if (studentProfileId) {
-        const studentScope = studentProfileId;
+        const studentScope = user.uid;  
         baseCollections.push(
-          fetchCollection<Enrollment>('enrollments', setEnrollments, [where('studentId', '==', studentScope)]),
-          fetchCollection<StudentPlan>('studentPlans', setStudentPlans, [where('studentId', '==', studentScope)]),
+          fetchCollection<Enrollment>('enrollments', setEnrollments, [where('studentUid', '==', user.uid)]),
+          fetchCollection<StudentPlan>('studentPlans', setStudentPlans, [where('studentUid', '==', user.uid)]),
           fetchCollection<SessionBooking>('sessionBookings', setSessionBookings, [
-            where('studentId', '==', studentScope),
+            where('studentUid', '==', user.uid),
           ]),
           fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements, [
-            where('studentId', '==', studentScope),
+            where('studentUid', '==', user.uid),
           ]),
-          fetchCollection<Payment>('payments', setPayments, [where('studentId', '==', studentScope)]),
-          fetchCollection<Evaluation>('evaluations', setEvaluations, [where('studentId', '==', studentScope)]),
-          fetchCollection<Goal>('goals', setGoals, [where('studentId', '==', studentScope)]),
+          fetchCollection<Payment>('payments', setPayments, [where('studentUid', '==', user.uid)]),
+          fetchCollection<Evaluation>('evaluations', setEvaluations, [where('studentUid', '==', user.uid)]),
+          fetchCollection<Goal>('goals', setGoals, [where('studentUid', '==', user.uid)]),
         );
       } else {
         setEnrollments([]);
@@ -669,7 +669,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const profileId = createCollectionId('studentProfiles');
+      const profileId = user.uid;
       const profile: StudentProfile = {
         id: profileId,
         userId: user.uid,
@@ -683,7 +683,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       setStudentProfileId(profile.id);
       setStudents((current) => [...current, profile]);
-      await setDoc(doc(db, 'studentProfiles', profile.id), profile, { merge: true });
+      await setDoc(doc(db, 'studentProfiles', user.uid), profile, { merge: true });
       return profile;
     },
     [createCollectionId, mapSnapshot, resolveStudentProfileIdForIdentifier, students, user],
