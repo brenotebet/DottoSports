@@ -387,7 +387,26 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const resolved = await resolveStudentProfileId(target);
       if (resolved) return resolved;
 
-      if (studentIdentifier) return studentIdentifier;
+      // ✅ If they passed an explicit identifier, only return it if it is DEFINITELY a profile id.
+      // If it was a UID and we couldn't resolve it, we should not pretend it's a profile id.
+      if (studentIdentifier) {
+        // If it's a UID, it should match a userId somewhere; otherwise it might already be a profileId.
+        const byUserId = students.find((p) => p.userId === studentIdentifier);
+        if (byUserId) return byUserId.id;
+
+        const byId = students.find((p) => p.id === studentIdentifier);
+        if (byId) return byId.id;
+
+        // last resort: try direct doc read
+        try {
+          const snap = await getDoc(doc(db, 'studentProfiles', studentIdentifier));
+          if (snap.exists()) return studentIdentifier; // it's a real profile doc id
+        } catch {
+          // ignore
+        }
+
+        throw new Error('Perfil de aluno não encontrado para o identificador informado.');
+      }
 
       throw new Error('Perfil de aluno não encontrado para o usuário atual.');
     },
@@ -785,71 +804,62 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       setStudentProfileId(profile.id);
       setStudents((current) => [...current, profile]);
-      await setDoc(doc(db, 'studentProfiles', user.uid), profile, { merge: true });
+      await setDoc(doc(db, 'studentProfiles', profileId), profile, { merge: true });
       return profile;
     },
     [mapSnapshot, resolveStudentProfileIdForIdentifier, students, user],
   );
 
   const saveDocument = useCallback(
-    async <T extends { id: string }>(path: string, payload: T) => {
-      try {
-        await setDoc(doc(db, path, payload.id), payload);
-      } catch (error) {
-        console.warn(`Save for ${path} failed; applying local fallback`, error);
-        if (!isPermissionDenied(error)) {
-          throw error;
-        }
+  async <T extends { id: string }>(path: string, payload: T) => {
+    try {
+      await setDoc(doc(db, path, payload.id), payload);
+      return;
+    } catch (error) {
+      console.warn(`Save for ${path} failed; applying local fallback`, error);
+      if (!isPermissionDenied(error)) throw error;
 
-        setEvents((prev) => {
-          const fallbackEvent: SystemEvent = {
-            id: generateId('evt'),
-            type: 'validation_error',
-            message: `Fallback gravado localmente para ${path}`,
-            timestamp: new Date().toISOString(),
-            context: { path, id: payload.id },
-          };
-          return [fallbackEvent, ...prev].slice(0, MAX_EVENT_ENTRIES);
+      // ✅ use the same event logger everywhere
+      logEvent('validation_error', `Fallback gravado localmente para ${path}`, { path, id: payload.id });
+
+      if (path === 'studentPlans') {
+        setStudentPlans((current) => {
+          const others = current.filter((item) => item.id !== payload.id);
+          return [...others, payload as unknown as StudentPlan];
         });
-
-        if (path === 'studentPlans') {
-          setStudentPlans((current) => {
-            const others = current.filter((item) => item.id !== payload.id);
-            return [...others, payload as unknown as StudentPlan];
-          });
-          return;
-        }
-
-        if (path === 'payments') {
-          setPayments((current) => {
-            const others = current.filter((item) => item.id !== payload.id);
-            return [...others, payload as unknown as Payment];
-          });
-          return;
-        }
-
-        if (path === 'invoices') {
-          setInvoices((current) => {
-            const others = current.filter((item) => item.id !== payload.id);
-            return [...others, payload as unknown as Invoice];
-          });
-          return;
-        }
-
-        if (path === 'sessionBookings') {
-          setSessionBookings((current) => {
-            const others = current.filter((item) => item.id !== payload.id);
-            return [...others, payload as unknown as SessionBooking];
-          });
-          return;
-        }
-
-        // Fallback unknown paths: rethrow
-        throw error;
+        return;
       }
-    },
-    [generateId],
-  );
+
+      if (path === 'payments') {
+        setPayments((current) => {
+          const others = current.filter((item) => item.id !== payload.id);
+          return [...others, payload as unknown as Payment];
+        });
+        return;
+      }
+
+      if (path === 'invoices') {
+        setInvoices((current) => {
+          const others = current.filter((item) => item.id !== payload.id);
+          return [...others, payload as unknown as Invoice];
+        });
+        return;
+      }
+
+      if (path === 'sessionBookings') {
+        setSessionBookings((current) => {
+          const others = current.filter((item) => item.id !== payload.id);
+          return [...others, payload as unknown as SessionBooking];
+        });
+        return;
+      }
+
+      // fallback unknown paths
+      throw error;
+    }
+  },
+  [logEvent],
+);
 
   const chunkArray = useCallback(<T,>(items: T[], size = 10) => {
     const chunks: T[][] = [];
