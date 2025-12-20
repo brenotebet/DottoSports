@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -16,26 +16,16 @@ export const options = { headerShown: false };
 export default function PaymentsScreen() {
   const { user } = useAuth();
   const {
-    ensureStudentProfile,
     cardOnFile,
     payOutstandingPayment,
     getStudentAccountSnapshot,
   } = useInstructorData();
-  const [studentId, setStudentId] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    if (user) {
-      void (async () => {
-        const profile = await ensureStudentProfile(user.email, user.displayName);
-        setStudentId(user.uid ?? profile.id);
-      })();
-    }
-  }, [ensureStudentProfile, user]);
 
   const studentAccount = useMemo(
-    () => (studentId ? getStudentAccountSnapshot(studentId) : null),
-    [getStudentAccountSnapshot, studentId],
+    () => (user?.uid ? getStudentAccountSnapshot(user.uid) : null),
+    [getStudentAccountSnapshot, user?.uid],
   );
 
   const studentBalances = useMemo(
@@ -53,11 +43,11 @@ export default function PaymentsScreen() {
   );
 
   const handlePay = async (paymentId: string) => {
+    if (!user?.uid) return;
     try {
       const { session } = await payOutstandingPayment(paymentId);
       Alert.alert(
-        'Pagamento confirmado',
-        `Checkout ${session.id} confirmado. Atualizamos seu saldo e recibo.`,
+          'Pagamento registrado', 'Atualizamos seu saldo localmente (modo teste).'
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
@@ -86,7 +76,7 @@ export default function PaymentsScreen() {
           <View style={styles.cardActions}>
             <View style={styles.cardBadge}>
               <IconSymbol name="creditcard" color="#0e9aed" size={18} />
-              <ThemedText style={styles.cardBadgeText}>{cardOnFile.label}</ThemedText>
+              <ThemedText style={styles.cardBadgeText}>{cardOnFile?.label ?? 'Sem cartão cadastrado'}</ThemedText>
             </View>
             <Link href="/(tabs)/menu" asChild>
               <Pressable style={styles.secondaryAction}>

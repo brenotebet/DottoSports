@@ -37,7 +37,6 @@ import type {
   UserAccount,
 } from '@/constants/schema';
 import { db } from '@/services/firebase';
-import { resolveStudentProfileId } from '@/services/student-profile-resolver';
 import { useAuth } from './auth-provider';
 
 export type RosterEntry = {
@@ -75,12 +74,12 @@ type PaymentLedgerEntry = {
   status: Payment['status'] | 'overdue';
 };
 
+type StudentOwned = { studentUid?: string };
+
 type StudentIdentity = {
   studentUid: string;
-  studentId: string;
 };
 
-type StudentOwned = { studentId?: string; studentUid?: string };
 
 type StudentAccountSnapshot = {
   enrollments: Enrollment[];
@@ -131,7 +130,7 @@ type InstructorDataContextValue = {
   rosterByClass: Record<string, RosterEntry[]>;
   loading: boolean;
   reloadFromStorage: () => Promise<void>;
-  getStudentAccountSnapshot: (studentId: string) => StudentAccountSnapshot;
+  getStudentAccountSnapshot: (studentUid: string) => StudentAccountSnapshot;
   payOutstandingPayment: (paymentId: string) => Promise<{ session: PaymentSession; intent: PaymentIntent }>;
   createClass: (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateClass: (id: string, payload: Partial<TrainingClass>) => Promise<void>;
@@ -140,7 +139,7 @@ type InstructorDataContextValue = {
   updateSession: (id: string, payload: Partial<ClassSession>) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   ensureStudentProfile: (email: string, displayName: string) => Promise<StudentProfile>;
-  getEnrollmentForStudent: (studentId: string, classId: string) => Enrollment | undefined;
+  getEnrollmentForStudent: (studentUid: string, classId: string) => Enrollment | undefined;
   enrollStudentInClass: (
     studentUid: string,
     classId: string,
@@ -151,13 +150,13 @@ type InstructorDataContextValue = {
     enrollmentId: string,
     status: Attendance['status'],
   ) => Promise<void>;
-  getActivePlanForStudent: (studentId: string) => StudentPlan | undefined;
+  getActivePlanForStudent: (studentUid: string) => StudentPlan | undefined;
   selectPlanForStudent: (studentUid: string, planOptionId: string, billing: StudentPlan['billing']) => Promise<StudentPlan>;
   getWeeklyUsageForStudent: (
-    studentId: string,
+    studentUid: string,
     referenceDate?: Date,
   ) => { used: number; limit: number; remaining: number; weekStart: string };
-  isSessionBooked: (sessionId: string, studentId: string) => boolean;
+  isSessionBooked: (sessionId: string, studentUid: string) => boolean;
   bookSessionForStudent: (sessionId: string, studentUid: string) => Promise<SessionBooking>;
   reinstateClassForWeek: (studentUid: string, weekStart: string, amount?: number, notes?: string) => Promise<CreditReinstatement>;
   recordCheckIn: (sessionId: string, enrollmentId: string, method: 'qr' | 'manual') => Promise<Attendance>;
@@ -192,7 +191,7 @@ type InstructorDataContextValue = {
   updateGoal: (id: string, payload: Partial<Goal>) => Promise<void>;
   deleteGoal: (id: string) => Promise<void>;
   getStudentProfileForEmail: (email: string, displayName?: string) => Promise<StudentProfile>;
-  getStudentEvaluations: (studentId: string) => Evaluation[];
+  getStudentEvaluations: (studentUid: string) => Evaluation[];
 };
 
 const InstructorDataContext = createContext<InstructorDataContextValue | undefined>(undefined);
@@ -299,7 +298,7 @@ const mergeById = <T extends { id: string }>(primary: T[], secondary: T[] = []) 
 };
 
 const matchesStudentIdentity = (record: StudentOwned, identity: StudentIdentity) =>
-  record.studentUid === identity.studentUid || record.studentId === identity.studentId;
+  record.studentUid === identity.studentUid;
 
 export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [classes, setClasses] = useState<TrainingClass[]>([]);
@@ -325,7 +324,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [events, setEvents] = useState<SystemEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, hasRole, initializing } = useAuth();
-  const [studentProfileId, setStudentProfileId] = useState<string | null | undefined>(undefined);
   const createCollectionId = useCallback((path: string) => doc(collection(db, path)).id, []);
 
   const normalizeFirestoreValue = useCallback((value: unknown): unknown => {
@@ -367,121 +365,19 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const isInstructor = hasRole(['INSTRUCTOR', 'ADMIN']);
 
-  const resolveStudentProfileIdForIdentifier = useCallback(
-    async (studentIdentifier?: string | null) => {
-      const target = studentIdentifier ?? user?.uid;
-      if (!target) {
-        throw new Error('Você precisa estar autenticado para localizar um perfil de aluno.');
-      }
-
-      const studentById = studentIdentifier ? students.find((profile) => profile.id === studentIdentifier) : undefined;
-      if (studentById) return studentById.id;
-
-      const studentByUser = students.find((profile) => profile.userId === target);
-      if (studentByUser) return studentByUser.id;
-
-      if (!studentIdentifier && studentProfileId) {
-        return studentProfileId;
-      }
-
-      const resolved = await resolveStudentProfileId(target);
-      if (resolved) return resolved;
-
-      // ✅ If they passed an explicit identifier, only return it if it is DEFINITELY a profile id.
-      // If it was a UID and we couldn't resolve it, we should not pretend it's a profile id.
-      if (studentIdentifier) {
-        // If it's a UID, it should match a userId somewhere; otherwise it might already be a profileId.
-        const byUserId = students.find((p) => p.userId === studentIdentifier);
-        if (byUserId) return byUserId.id;
-
-        const byId = students.find((p) => p.id === studentIdentifier);
-        if (byId) return byId.id;
-
-        // last resort: try direct doc read
-        try {
-          const snap = await getDoc(doc(db, 'studentProfiles', studentIdentifier));
-          if (snap.exists()) return studentIdentifier; // it's a real profile doc id
-        } catch {
-          // ignore
-        }
-
-        throw new Error('Perfil de aluno não encontrado para o identificador informado.');
-      }
-
-      throw new Error('Perfil de aluno não encontrado para o usuário atual.');
-    },
-    [studentProfileId, students, user],
-  );
-
-  const normalizeStudentProfileId = useCallback(
-    (identifier: string) => {
-      if (!identifier) return identifier;
-      const studentById = students.find((profile) => profile.id === identifier);
-      if (studentById) return studentById.id;
-
-      const studentByUser = students.find((profile) => profile.userId === identifier);
-      if (studentByUser) return studentByUser.id;
-      if (identifier === user?.uid && studentProfileId) return studentProfileId;
-
-      return identifier;
-    },
-    [studentProfileId, students, user],
-  );
-
   const resolveStudentIdentity = useCallback(
-    async (studentIdentifier?: string | null): Promise<StudentIdentity> => {
-      const profileById = studentIdentifier ? students.find((profile) => profile.id === studentIdentifier) : undefined;
-      const profileByUser = studentIdentifier
-        ? students.find((profile) => profile.userId === studentIdentifier)
-        : undefined;
-
-      let fetchedProfileUserId: string | undefined;
-      if (!profileById && studentIdentifier) {
-        try {
-          const snap = await getDoc(doc(db, 'studentProfiles', studentIdentifier));
-          if (snap.exists()) {
-            fetchedProfileUserId = (snap.data() as { userId?: string }).userId;
-          }
-        } catch (error) {
-          console.warn('Fallback lookup for student profile identity failed', error);
-        }
-      }
-
-      const studentUid =
-        profileById?.userId ?? profileByUser?.userId ?? fetchedProfileUserId ?? studentIdentifier ?? user?.uid;
-
-      if (!studentUid) {
-        throw new Error('Você precisa estar autenticado para localizar um perfil de aluno.');
-      }
-
-      const studentId =
-        profileById?.id ??
-        profileByUser?.id ??
-        (fetchedProfileUserId ? studentIdentifier ?? undefined : undefined) ??
-        (studentUid === user?.uid && studentProfileId ? studentProfileId : undefined) ??
-        (await resolveStudentProfileId(studentUid)) ??
-        studentIdentifier ??
-        studentUid;
-
-      return { studentUid, studentId };
+    async (studentUid?: string | null): Promise<StudentIdentity> => {
+      const uid = studentUid ?? user?.uid;
+      if (!uid) throw new Error('Você precisa estar autenticado.');
+      return { studentUid: uid };
     },
-    [studentProfileId, students, user],
+    [user],
   );
 
-  const resolveCachedStudentIdentity = useCallback(
-    (studentIdentifier: string): StudentIdentity => {
-      const profileById = students.find((profile) => profile.id === studentIdentifier);
-      const profileByUser = students.find((profile) => profile.userId === studentIdentifier);
-      const studentUid = profileById?.userId ?? profileByUser?.userId ?? studentIdentifier ?? user?.uid ?? '';
-      const studentId =
-        profileById?.id ??
-        profileByUser?.id ??
-        (studentUid === user?.uid && studentProfileId ? studentProfileId : normalizeStudentProfileId(studentIdentifier));
-
-      return { studentUid, studentId };
-    },
-    [normalizeStudentProfileId, studentProfileId, students, user],
-  );
+const resolveCachedStudentIdentity = useCallback(
+  (studentUid: string): StudentIdentity => ({ studentUid }),
+  [],
+);
 
   const syncCurrentUserRecord = useCallback(async () => {
     if (!user) return;
@@ -501,7 +397,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     const nowIso = new Date().toISOString();
     setUsers([
       {
-        id: user.uid,
+        uid: user.uid,
         email: user.email,
         role: user.role,
         status: 'active',
@@ -512,35 +408,9 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     ]);
   }, [mapSnapshot, user]);
 
-  useEffect(() => {
-    if (!user || isInstructor) {
-      setStudentProfileId(null);
-      return;
-    }
-
-    let isMounted = true;
-    setStudentProfileId(undefined);
-
-    void resolveStudentProfileIdForIdentifier(user.uid)
-      .then((profileId) => {
-        if (isMounted) setStudentProfileId(profileId);
-      })
-      .catch((error) => {
-        console.warn('Unable to resolve student profile for user; filtering queries to empty scope', error);
-        if (isMounted) setStudentProfileId(null);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isInstructor, resolveStudentProfileIdForIdentifier, user]);
 
   useEffect(() => {
     if (initializing || !user) return;
-    if (!isInstructor && studentProfileId === undefined) {
-      setLoading(true);
-      return;
-    }
 
     const subscriptions: Unsubscribe[] = [];
 
@@ -567,44 +437,21 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
     const subscribeStudentOwned = <T extends { id: string }>(path: string, setter: (items: T[]) => void) => {
       const baseRef = collection(db, path);
-      let uidDocs: T[] = [];
-      let legacyDocs: T[] = [];
 
-      const mergeAndSet = () => {
-        const merged = mergeById(uidDocs, legacyDocs);
-        setter(merged);
-        setLoading(false);
-      };
+      const unsubscribe = onSnapshot(
+        query(baseRef, where('studentUid', '==', user.uid)),
+        (snap) => {
+          const payload = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
+          setter(payload);
+          setLoading(false);
+        },
+        (error) => {
+          console.warn(`Subscription to ${path} (studentUid) failed`, error);
+          setLoading(false);
+        },
+      );
 
-      if (user?.uid) {
-        const unsubscribeUid = onSnapshot(
-          query(baseRef, where('studentUid', '==', user.uid)),
-          (snap) => {
-            uidDocs = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
-            mergeAndSet();
-          },
-          (error) => {
-            console.warn(`Subscription to ${path} (studentUid) failed`, error);
-            setLoading(false);
-          },
-        );
-        subscriptions.push(unsubscribeUid);
-      }
-
-      if (studentProfileId) {
-        const unsubscribeLegacy = onSnapshot(
-          query(baseRef, where('studentId', '==', studentProfileId)),
-          (snap) => {
-            legacyDocs = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
-            mergeAndSet();
-          },
-          (error) => {
-            console.warn(`Subscription to ${path} (studentId) failed`, error);
-            setLoading(false);
-          },
-        );
-        subscriptions.push(unsubscribeLegacy);
-      }
+      subscriptions.push(unsubscribe);
     };
 
     subscribe<TrainingClass>('classes', setClasses);
@@ -641,14 +488,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     }
 
     return () => subscriptions.forEach((unsubscribe) => unsubscribe());
-  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, studentProfileId, syncCurrentUserRecord, user]);
+  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, syncCurrentUserRecord, user]);
 
   const reloadFromStorage = useCallback(async () => {
     if (initializing || !user) return;
-    if (!isInstructor && studentProfileId === undefined) {
-      setLoading(true);
-      return;
-    }
 
     const fetchCollection = async <T,>(
       path: string,
@@ -668,16 +511,12 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     };
 
     const fetchStudentOwned = async <T extends { id: string }>(path: string, setter: (items: T[]) => void) => {
-      const baseRef = collection(db, path);
-
-      const uidPromise = user?.uid ? getDocs(query(baseRef, where('studentUid', '==', user.uid))) : null;
-      const legacyPromise = studentProfileId ? getDocs(query(baseRef, where('studentId', '==', studentProfileId))) : null;
+    const baseRef = collection(db, path);
 
       try {
-        const [uidSnap, legacySnap] = await Promise.all([uidPromise, legacyPromise]);
-        const uidDocs = uidSnap ? uidSnap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id)) : [];
-        const legacyDocs = legacySnap ? legacySnap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id)) : [];
-        setter(mergeById(uidDocs, legacyDocs));
+        const snap = await getDocs(query(baseRef, where('studentUid', '==', user.uid)));
+        const docs = snap.docs.map((docSnap) => mapSnapshot<T>(docSnap.data(), docSnap.id));
+        setter(docs);
       } catch (error) {
         console.warn(`Reload for ${path} skipped due to permission issue`, error);
         setter([]);
@@ -727,24 +566,12 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
     await Promise.all(baseCollections);
     setLoading(false);
-  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, studentProfileId, syncCurrentUserRecord, user]);
+  }, [filterPlanOptions, initializing, isInstructor, mapSnapshot, syncCurrentUserRecord, user]);
 
   useEffect(() => {
     void reloadFromStorage();
   }, [reloadFromStorage]);
 
-  useEffect(() => {
-    if (isInstructor || !user) return;
-    if (!studentProfileId) return;
-
-    console.log('[StudentDebug]', {
-      uid: user.uid,
-      studentProfileId,
-      planQuery: ['studentPlans', 'studentUid ==', user.uid, 'studentId ==', studentProfileId],
-      evaluationQuery: ['evaluations', 'studentUid ==', user.uid, 'studentId ==', studentProfileId],
-      goalQuery: ['goals', 'studentUid ==', user.uid, 'studentId ==', studentProfileId],
-    });
-  }, [isInstructor, studentProfileId, user]);
 
   const logEvent = useCallback(
     (type: SystemEvent['type'], message: string, context?: Record<string, unknown>) => {
@@ -758,57 +585,37 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const ensureStudentProfile = useCallback(
-    async (email: string, displayName: string) => {
-      if (!user) {
-        throw new Error('Você precisa estar autenticado para criar ou acessar o perfil de aluno.');
-      }
+const ensureStudentProfile = useCallback(
+  async (email: string, displayName: string) => {
+    if (!user) throw new Error('Você precisa estar autenticado.');
 
-      const resolvedId = await resolveStudentProfileIdForIdentifier(user.uid).catch(() => null);
-      const existingProfile =
-        students.find((profile) => profile.userId === user.uid) ??
-        students.find((profile) => (resolvedId ? profile.id === resolvedId : false));
-      if (existingProfile) {
-        setStudentProfileId(existingProfile.id);
-        return existingProfile;
-      }
+    // if already in memory
+    const existing = students.find((p) => p.id === user.uid);
+    if (existing) return existing;
 
-      if (resolvedId) {
-        try {
-          const snap = await getDoc(doc(db, 'studentProfiles', resolvedId));
-          if (snap.exists()) {
-            const payload = mapSnapshot<StudentProfile>(snap.data(), snap.id);
-            setStudentProfileId(snap.id);
-            setStudents((current) => {
-              const others = current.filter((profile) => profile.id !== snap.id);
-              return [...others, payload];
-            });
-            return payload;
-          }
-        } catch (error) {
-          console.warn('Failed to load existing student profile by resolved id, creating a new one.', error);
-        }
-      }
+    const profileId = user.uid;
+    const profile: StudentProfile = {
+      id: profileId,
+      uid: user.uid,
+      fullName: displayName || email || user.displayName || user.email,
+      phone: '+55 11 99999-0000',
+      birthDate: '1995-01-01',
+      experienceLevel: 'beginner',
+      goals: ['Entrar em forma e manter consistência'],
+      emergencyContact: { name: 'Contato padrão', phone: '+55 11 98888-0000' },
+    };
 
-      const profileId = user.uid;
-      const profile: StudentProfile = {
-        id: profileId,
-        userId: user.uid,
-        fullName: displayName || email || user.displayName || user.email,
-        phone: '+55 11 99999-0000',
-        birthDate: '1995-01-01',
-        experienceLevel: 'beginner',
-        goals: ['Entrar em forma e manter consistência'],
-        emergencyContact: { name: 'Contato padrão', phone: '+55 11 98888-0000' },
-      };
+    setStudents((current) => {
+      const others = current.filter((p) => p.id !== profileId);
+      return [...others, profile];
+    });
 
-      setStudentProfileId(profile.id);
-      setStudents((current) => [...current, profile]);
-      await setDoc(doc(db, 'studentProfiles', profileId), profile, { merge: true });
-      return profile;
-    },
-    [mapSnapshot, resolveStudentProfileIdForIdentifier, students, user],
-  );
+    await setDoc(doc(db, 'studentProfiles', profileId), profile, { merge: true });
+    return profile;
+  },
+  [students, user],
+);
+
 
   const saveDocument = useCallback(
   async <T extends { id: string }>(path: string, payload: T) => {
@@ -875,8 +682,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   );
 
   const getActivePlanForStudent = useCallback(
-    (studentId: string) => {
-      const identity = resolveCachedStudentIdentity(studentId);
+    (studentUid: string) => {
+      const identity = resolveCachedStudentIdentity(studentUid);
       return studentPlans
         .filter((plan) => matchesStudentIdentity(plan, identity) && plan.status === 'active')
         .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime())[0];
@@ -886,7 +693,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const upsertPlanPayment = useCallback(
     async (student: StudentIdentity, option: PlanOption, billing: StudentPlan['billing']) => {
-      const { studentId, studentUid } = student;
+      const { studentUid } = student;
       const amount = billing === 'recurring' ? option.priceMonthly : option.priceUpfront;
       const issueDate = new Date();
       const dueDate = new Date();
@@ -904,12 +711,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         (payment) => matchesStudentIdentity(payment, student) && payment.status !== 'paid',
       );
       const paymentId = existingPayment?.id ?? createCollectionId('payments');
-      const enrollmentId = existingPayment?.enrollmentId ?? existingEnrollmentId ?? `${studentId}-unassigned-plan`;
+      const enrollmentId = existingPayment?.enrollmentId ?? existingEnrollmentId ?? `${studentUid}-unassigned-plan`;
 
       const payment: Payment = {
         id: paymentId,
         studentUid,
-        studentId,
         amount,
         currency: 'BRL',
         method: 'pix',
@@ -925,6 +731,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const invoice: Invoice = existingInvoice
         ? {
             ...existingInvoice,
+            studentUid,
             issueDate: issueDateFormatted,
             total: amount,
             status: 'open',
@@ -933,6 +740,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           }
         : {
             id: createCollectionId('invoices'),
+            studentUid,
             paymentId,
             enrollmentId,
             issueDate: issueDateFormatted,
@@ -950,7 +758,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       }
 
       logEvent('payment_posted', 'Cobrança atualizada para refletir novo plano.', {
-        studentId,
         studentUid,
         paymentId: payment.id,
         amount,
@@ -963,7 +770,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const selectPlanForStudent = useCallback(
     async (studentUid: string, planOptionId: string, billing: StudentPlan['billing']) => {
       const student = await resolveStudentIdentity(studentUid);
-      const { studentId, studentUid: resolvedStudentUid } = student;
+      const { studentUid: resolvedStudentUid } = student;
       const option = planOptions.find((item) => item.id === planOptionId);
       if (!option) {
         throw new Error('Plano selecionado não encontrado.');
@@ -996,7 +803,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const newPlan: StudentPlan = {
         id: createCollectionId('studentPlans'),
         studentUid: student.studentUid,
-        studentId,
         planOptionId,
         billing,
         startDate: nowIso,
@@ -1017,7 +823,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       }
 
       logEvent('enrollment_created', 'Plano selecionado/atualizado pelo aluno', {
-        studentId,
         studentUid: student.studentUid,
         planOptionId,
         billing,
@@ -1030,7 +835,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
           throw error;
         }
         logEvent('validation_error', 'Cobrança não registrada no backend; mantendo valores em memória.', {
-          studentId,
           studentUid: student.studentUid,
           planOptionId,
           billing,
@@ -1051,9 +855,9 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   );
 
   const getWeeklyUsageForStudent = useCallback(
-    (studentId: string, referenceDate = new Date()) => {
-      const identity = resolveCachedStudentIdentity(studentId);
-      const activePlan = getActivePlanForStudent(identity.studentId);
+    (studentUid: string, referenceDate = new Date()) => {
+      const identity = resolveCachedStudentIdentity(studentUid);
+      const activePlan = getActivePlanForStudent(identity.studentUid);
       const weekStart = startOfWeekIso(referenceDate);
       const reinstated = creditReinstatements
         .filter((item) => matchesStudentIdentity(item, identity) && item.weekStart === weekStart)
@@ -1082,8 +886,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   );
 
   const isSessionBooked = useCallback(
-    (sessionId: string, studentId: string) => {
-      const identity = resolveCachedStudentIdentity(studentId);
+    (sessionId: string, studentUid: string) => {
+      const identity = resolveCachedStudentIdentity(studentUid);
       return sessionBookings.some(
         (booking) =>
           booking.sessionId === sessionId && matchesStudentIdentity(booking, identity) && booking.status === 'booked',
@@ -1094,15 +898,17 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const bookSessionForStudent = useCallback(
     async (sessionId: string, studentUid: string) => {
-      const { studentId, studentUid: resolvedUid } = await resolveStudentIdentity(studentUid);
+      const { studentUid: resolvedUid } = await resolveStudentIdentity(studentUid);
       const targetSession = sessions.find((item) => item.id === sessionId);
-      const activePlan = getActivePlanForStudent(studentId);
+      const activePlan = getActivePlanForStudent(resolvedUid);
+
       if (!targetSession || !activePlan) {
         throw new Error('Sessão ou plano não localizado para realizar a reserva.');
       }
 
-      const usage = getWeeklyUsageForStudent(studentId, new Date(targetSession.startTime));
-      if (isSessionBooked(sessionId, studentId)) {
+      const usage = getWeeklyUsageForStudent(resolvedUid, new Date(targetSession.startTime));
+
+      if (isSessionBooked(sessionId, resolvedUid)) {
         throw new Error('Você já tem essa sessão reservada.');
       }
 
@@ -1113,7 +919,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const newBooking: SessionBooking = {
         id: createCollectionId('sessionBookings'),
         studentUid: resolvedUid,
-        studentId,
         sessionId,
         weekStart: usage.weekStart,
         createdAt: new Date().toISOString(),
@@ -1121,14 +926,15 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       };
 
       await saveDocument('sessionBookings', newBooking);
+
       logEvent('enrollment_created', 'Reserva realizada com base no plano semanal', {
-        studentId,
         studentUid: resolvedUid,
         sessionId,
         weekStart: usage.weekStart,
       });
 
       return newBooking;
+
     },
     [
       createCollectionId,
@@ -1147,11 +953,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       if (!isInstructor) {
         console.warn('Attempted to reinstate credits as a student. Operation may be blocked by rules.');
       }
-      const { studentId, studentUid: resolvedUid } = await resolveStudentIdentity(studentUid);
+      const { studentUid: resolvedUid } = await resolveStudentIdentity(studentUid);
       const reinstatement: CreditReinstatement = {
         id: createCollectionId('creditReinstatements'),
         studentUid: resolvedUid,
-        studentId,
         weekStart,
         amount,
         notes,
@@ -1160,7 +965,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       await saveDocument('creditReinstatements', reinstatement);
       logEvent('attendance_marked', 'Crédito semanal reinserido pelo instrutor', {
-        studentId,
         studentUid: resolvedUid,
         weekStart,
         amount,
@@ -1172,8 +976,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   );
 
   const getEnrollmentForStudent = useCallback(
-    (studentId: string, classId: string) => {
-      const identity = resolveCachedStudentIdentity(studentId);
+    (studentUid: string, classId: string) => {
+      const identity = resolveCachedStudentIdentity(studentUid);
       return enrollments.find((item) => matchesStudentIdentity(item, identity) && item.classId === classId);
     },
     [enrollments, resolveCachedStudentIdentity],
@@ -1182,24 +986,22 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const enrollStudentInClass = useCallback(
     async (studentUid: string, classId: string) => {
       const student = await resolveStudentIdentity(studentUid);
-      const { studentId } = student;
-      const activePlan = getActivePlanForStudent(studentId);
+      const activePlan = getActivePlanForStudent(student.studentUid);
       const nextSessionForClass = sessions
         .filter((session) => session.classId === classId)
         .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
       const referenceDate = nextSessionForClass ? new Date(nextSessionForClass.startTime) : new Date();
-      const weeklyUsage = getWeeklyUsageForStudent(studentId, referenceDate);
+      const weeklyUsage = getWeeklyUsageForStudent(student.studentUid, referenceDate);
 
       if (!activePlan) {
         const message = 'Um plano ativo é necessário para se inscrever em aulas.';
-        logEvent('validation_error', message, { studentId, studentUid: student.studentUid, classId });
+        logEvent('validation_error', message, { studentUid: student.studentUid, classId });
         throw new Error(message);
       }
 
       if (weeklyUsage.limit === 0 || weeklyUsage.remaining <= 0) {
         const message = 'Limite semanal atingido. Selecione um plano com mais aulas ou espere a próxima semana.';
         logEvent('validation_error', message, {
-          studentId,
           studentUid: student.studentUid,
           classId,
           weekStart: weeklyUsage.weekStart,
@@ -1213,7 +1015,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const classInfo = classes.find((item) => item.id === classId);
       if (!classInfo) {
         const message = 'Turma não encontrada para inscrição.';
-        logEvent('validation_error', message, { studentId, studentUid: student.studentUid, classId });
+        logEvent('validation_error', message, { studentUid: student.studentUid, classId });
         throw new Error(message);
       }
       const activeCount = enrollments.filter(
@@ -1223,7 +1025,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       if (existing && existing.status !== 'cancelled') {
         logEvent('validation_error', 'Tentativa de inscrição duplicada bloqueada.', {
-          studentId,
           studentUid: student.studentUid,
           classId,
           enrollmentId: existing.id,
@@ -1235,7 +1036,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         const reactivated: Enrollment = {
           ...existing,
           studentUid: existing.studentUid ?? student.studentUid,
-          studentId: existing.studentId ?? student.studentId,
           status: isWaitlist ? 'waitlist' : 'active',
           createdAt: now,
           updatedAt: now,
@@ -1246,7 +1046,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         logEvent('enrollment_created', 'Inscrição reativada após cancelamento.', {
           enrollmentId: existing.id,
           classId,
-          studentId,
           studentUid: student.studentUid,
           waitlisted: isWaitlist,
         });
@@ -1257,7 +1056,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const enrollment: Enrollment = {
         id: createCollectionId('enrollments'),
         studentUid: student.studentUid,
-        studentId,
         classId,
         status: isWaitlist ? 'waitlist' : 'active',
         createdAt: now,
@@ -1268,7 +1066,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       logEvent('enrollment_created', 'Inscrição criada com validação de capacidade.', {
         enrollmentId: enrollment.id,
         classId,
-        studentId,
         studentUid: student.studentUid,
         waitlisted: isWaitlist,
       });
@@ -1303,15 +1100,15 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const resolveRosterStudent = useCallback(
     (enrollment: Enrollment): StudentProfile => {
       const student = students.find(
-        (item) => item.id === enrollment.studentId || item.userId === enrollment.studentUid,
+        (item) => item.id === enrollment.studentUid || item.uid === enrollment.studentUid,
       );
       if (student) return student;
 
-      const fallbackId = enrollment.studentId ?? enrollment.studentUid ?? 'student-unknown';
+      const fallbackId = enrollment.studentUid ?? 'student-unknown';
       const suffix = fallbackId.slice(-4) || fallbackId;
       return {
         id: fallbackId,
-        userId: enrollment.studentUid ?? fallbackId,
+        uid: enrollment.studentUid ?? fallbackId,
         fullName: `Aluno inscrito #${suffix}`,
         phone: '',
         birthDate: '',
@@ -1356,10 +1153,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       .map((payment) => {
         const invoice = invoices.find((item) => item.paymentId === payment.id);
         const student = students.find(
-          (item) => item.id === payment.studentId || item.userId === payment.studentUid,
+          (item) => item.id === payment.studentUid || item.uid === payment.studentUid,
         );
-        const ownerUserId = student?.userId ?? payment.studentUid ?? payment.studentId;
-        const email = users.find((account) => account.id === ownerUserId)?.email;
+        const ownerUserId = student?.uid ?? payment.studentUid;
+        const email = users.find((account) => account.uid === ownerUserId)?.email;
         const isOverdue = new Date(payment.dueDate) < new Date();
         return {
           payment,
@@ -1372,8 +1169,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   }, [enrollments, invoices, payments, students, users]);
 
   const getStudentAccountSnapshot = useCallback(
-    (studentId: string): StudentAccountSnapshot => {
-      const identity = resolveCachedStudentIdentity(studentId);
+    (studentUid: string): StudentAccountSnapshot => {
+      const identity = resolveCachedStudentIdentity(studentUid);
       const activeEnrollments = enrollments.filter(
         (item) => matchesStudentIdentity(item, identity) && item.status !== 'cancelled',
       );
@@ -1419,7 +1216,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     const attendanceRate = attendance.length ? presentCount / attendance.length : 0;
 
     const revenueByStudent = payments.reduce<Record<string, number>>((acc, payment) => {
-      const ownerKey = payment.studentUid ?? payment.studentId;
+      const ownerKey = payment.studentUid;
       if (payment.status === 'paid' && ownerKey) {
         acc[ownerKey] = (acc[ownerKey] ?? 0) + payment.amount;
       }
@@ -1636,11 +1433,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const createEvaluation = useCallback(
     async (payload: Omit<Evaluation, 'id'>) => {
-      const student = await resolveStudentIdentity(payload.studentUid ?? payload.studentId);
+      const student = await resolveStudentIdentity(payload.studentUid);
       const evaluation: Evaluation = {
         ...payload,
         studentUid: student.studentUid,
-        studentId: student.studentId,
         id: createCollectionId('evaluations'),
       };
       await saveDocument('evaluations', evaluation);
@@ -1658,11 +1454,10 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
   const createGoal = useCallback(
     async (payload: Omit<Goal, 'id'>) => {
-      const student = await resolveStudentIdentity(payload.studentUid ?? payload.studentId);
+      const student = await resolveStudentIdentity(payload.studentUid);
       const goal: Goal = {
         ...payload,
         studentUid: student.studentUid,
-        studentId: student.studentId,
         id: createCollectionId('goals'),
       };
       await saveDocument('goals', goal);
@@ -1679,8 +1474,8 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getStudentEvaluations = useCallback(
-    (studentId: string) => {
-      const identity = resolveCachedStudentIdentity(studentId);
+    (studentUid: string) => {
+      const identity = resolveCachedStudentIdentity(studentUid);
       return evaluations
         .filter((evaluation) => matchesStudentIdentity(evaluation, identity))
         .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -1693,12 +1488,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       if (!isInstructor) {
         console.warn('chargeStoredCard is instructor-only; student invocation will likely fail Firestore rules.');
       }
-      const { studentId, studentUid: resolvedUid } = await resolveStudentIdentity(studentUid);
+      const { studentUid: resolvedUid } = await resolveStudentIdentity(studentUid);
       const now = new Date();
       const payment: Payment = {
         id: createCollectionId('payments'),
         studentUid: resolvedUid,
-        studentId,
         amount,
         currency: 'BRL',
         method: 'credit_card',
@@ -1711,7 +1505,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       await saveDocument('payments', payment);
       logEvent('payment_posted', 'Pagamento lançado no cartão em arquivo.', {
         paymentId: payment.id,
-        studentId,
         studentUid: resolvedUid,
         amount,
         status: payment.status,
@@ -1726,12 +1519,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       if (!isInstructor) {
         console.warn('createOneTimePayment is instructor-only; student invocation will likely fail Firestore rules.');
       }
-      const { studentId, studentUid: resolvedUid } = await resolveStudentIdentity(studentUid);
+      const { studentUid: resolvedUid } = await resolveStudentIdentity(studentUid);
       const now = new Date();
       const payment: Payment = {
         id: createCollectionId('payments'),
         studentUid: resolvedUid,
-        studentId,
         amount,
         currency: 'BRL',
         method,
@@ -1744,7 +1536,6 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       await saveDocument('payments', payment);
       logEvent('payment_posted', 'Pagamento avulso registrado.', {
         paymentId: payment.id,
-        studentId,
         studentUid: resolvedUid,
         amount,
         status: payment.status,
@@ -1759,13 +1550,11 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
     async (enrollmentId: string, amount: number, method: Payment['method'], description: string) => {
       const enrollment = enrollments.find((item) => item.id === enrollmentId);
       const now = new Date();
-      const studentId = enrollment?.studentId ?? enrollment?.studentUid ?? 'student-unknown';
-      const studentUid = enrollment?.studentUid ?? enrollment?.studentId ?? 'student-unknown';
+      const studentUid = enrollment?.studentUid ?? 'student-unknown';
 
       const payment: Payment = {
         id: createCollectionId('payments'),
         studentUid,
-        studentId,
         enrollmentId,
         amount,
         currency: 'BRL',
@@ -1777,6 +1566,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       const invoice: Invoice = {
         id: createCollectionId('invoices'),
+        studentUid,
         paymentId: payment.id,
         enrollmentId,
         issueDate: now.toISOString().slice(0, 10),
@@ -1788,6 +1578,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
 
       const intent: PaymentIntent = {
         id: createCollectionId('paymentIntents'),
+        studentUid,
         paymentId: payment.id,
         enrollmentId,
         amount,
@@ -1824,6 +1615,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       const now = new Date();
       const session: PaymentSession = {
         id: createCollectionId('paymentSessions'),
+        studentUid: intent.studentUid,
         intentId,
         status: 'open',
         checkoutUrl: `https://pagamentos.dottosports.test/${intentId}`,
@@ -1869,6 +1661,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
       if (result === 'succeeded') {
         const receipt: Receipt = {
           id: createCollectionId('receipts'),
+          studentUid: intent.studentUid,
           paymentId,
           enrollmentId: intent.enrollmentId,
           issuedAt: nowIso,
@@ -1943,10 +1736,13 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
         (item) => item.paymentId === paymentId && item.status !== 'succeeded',
       );
 
+      const studentUid = payment.studentUid;
+
       let intent: PaymentIntent =
         existingIntent ??
         {
           id: createCollectionId('paymentIntents'),
+          studentUid, // ✅ now defined and correct
           paymentId,
           enrollmentId: payment.enrollmentId,
           amount: payment.amount,

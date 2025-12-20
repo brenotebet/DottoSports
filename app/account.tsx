@@ -18,21 +18,18 @@ export default function AccountScreen() {
   const { user } = useAuth();
   const { ensureStudentProfile, planOptions, getActivePlanForStudent, selectPlanForStudent } = useInstructorData();
 
-  const [studentId, setStudentId] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<StudentPlan['billing']>('recurring');
 
-  useEffect(() => {
-    if (user) {
-      void (async () => {
-        const profile = await ensureStudentProfile(user.email, user.displayName);
-        setStudentId(user.uid ?? profile.id);
-      })();
-    }
-  }, [ensureStudentProfile, user]);
+      useEffect(() => {
+        if (!user) return;
+
+        // ensure profile exists; identity is always auth.uid
+        void ensureStudentProfile(user.email, user.displayName);
+    }, [ensureStudentProfile, user]);
 
   const activePlan = useMemo(
-    () => (studentId ? getActivePlanForStudent(studentId) : undefined),
-    [getActivePlanForStudent, studentId],
+    () => (user ? getActivePlanForStudent(user.uid) : undefined),
+    [getActivePlanForStudent, user],
   );
 
   const activePlanOption = useMemo(
@@ -104,10 +101,10 @@ export default function AccountScreen() {
     : 0;
 
   const handleSelectPlan = async (planOptionId: string) => {
-    if (!studentId) return;
+    if (!user) return;
 
     try {
-      await selectPlanForStudent(studentId, planOptionId, billingCycle);
+      await selectPlanForStudent(user.uid, planOptionId, billingCycle);
       Alert.alert(
         activePlan ? 'Plano atualizado' : 'Plano salvo',
         billingCycle === 'recurring'

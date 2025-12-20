@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,22 +20,13 @@ const formatHeight = (meters?: number, centimeters?: number) => {
 
 export default function StudentEvaluationsScreen() {
   const { user, hasRole } = useAuth();
-  const { getStudentProfileForEmail, getStudentEvaluations } = useInstructorData();
-  const [studentId, setStudentId] = useState<string | null>(null);
+  const { getStudentEvaluations } = useInstructorData();
   const insets = useSafeAreaInsets();
 
-  useEffect(() => {
-    if (user) {
-      void (async () => {
-        const profile = await getStudentProfileForEmail(user.email, user.displayName);
-        setStudentId(user.uid ?? profile.id);
-      })();
-    }
-  }, [getStudentProfileForEmail, user]);
 
   const evaluations = useMemo(
-    () => (studentId ? getStudentEvaluations(studentId) : []),
-    [getStudentEvaluations, studentId],
+    () => (user?.uid ? getStudentEvaluations(user.uid) : []),
+    [getStudentEvaluations, user?.uid],
   );
 
   const latest = evaluations[0];

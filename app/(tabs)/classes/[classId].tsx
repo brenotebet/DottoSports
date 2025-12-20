@@ -31,13 +31,13 @@ export default function ClassDetailsScreen() {
   } = useInstructorData();
 
   const [statusMessage, setStatusMessage] = useState('');
-  const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const isInstructorView = hasRole(['INSTRUCTOR', 'ADMIN']);
+  const uid = user?.uid ?? null;
 
   const currentWeekUsage = useMemo(
-    () => (currentStudentId ? getWeeklyUsageForStudent(currentStudentId) : null),
-    [currentStudentId, getWeeklyUsageForStudent],
+    () => (uid ? getWeeklyUsageForStudent(uid) : null),
+    [uid, getWeeklyUsageForStudent],
   );
 
   const trainingClass = useMemo(() => classes.find((item) => item.id === classId), [classes, classId]);
@@ -46,30 +46,29 @@ export default function ClassDetailsScreen() {
     [classId, getCapacityUsage],
   );
 
-  useEffect(() => {
-    if (user) {
-      void (async () => {
-        const profile = await ensureStudentProfile(user.email, user.displayName);
-        setCurrentStudentId(user.uid ?? profile.id);
-      })();
-    }
-  }, [ensureStudentProfile, user]);
+
+    useEffect(() => {
+      if (!user) return;
+      void ensureStudentProfile(user.email, user.displayName);
+    }, [ensureStudentProfile, user]);
 
   const rosterEntries = useMemo(() => rosterByClass[classId ?? ''] ?? [], [classId, rosterByClass]);
+  const now = Date.now();
 
-  const upcomingSessions = useMemo(
-    () =>
-      sessions
-        .filter((session) => session.classId === classId)
-        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()),
-    [classId, sessions],
-  );
+
+  const upcomingSessions = useMemo(() => {
+  const now = Date.now();
+  return sessions
+    .filter((s) => s.classId === classId)
+    .filter((s) => new Date(s.startTime).getTime() >= now)
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+}, [classId, sessions]);
 
   const existingEnrollment = useMemo(() => {
-    if (!currentStudentId || !classId) return undefined;
-    const enrollment = getEnrollmentForStudent(currentStudentId, classId);
+    if (!uid || !classId) return undefined;
+    const enrollment = getEnrollmentForStudent(uid, classId);
     return enrollment?.status === 'cancelled' ? undefined : enrollment;
-  }, [classId, currentStudentId, getEnrollmentForStudent]);
+  }, [classId, uid, getEnrollmentForStudent]);
 
   const confirmAction = (title: string, message: string, onConfirm: () => void) => {
     Alert.alert(title, message, [
@@ -89,11 +88,11 @@ export default function ClassDetailsScreen() {
   }
 
   const handleEnroll = () => {
-    if (!currentStudentId) return;
+    if (!uid) return;
     confirmAction('Confirmar inscrição', 'Tem certeza que deseja se inscrever nesta aula?', () => {
       void (async () => {
         try {
-          const result = await enrollStudentInClass(currentStudentId, trainingClass.id);
+          const result = await enrollStudentInClass(uid, trainingClass.id);
           if (result.alreadyEnrolled) {
             const message = 'Você já está inscrito nesta aula.';
             setStatusMessage(message);
@@ -120,12 +119,12 @@ export default function ClassDetailsScreen() {
   };
 
   const handleBookSession = (sessionId: string, referenceDate: Date) => {
-    if (!currentStudentId) return;
+    if (!uid) return;
 
     void (async () => {
       try {
-        await bookSessionForStudent(sessionId, currentStudentId);
-        const usage = getWeeklyUsageForStudent(currentStudentId, referenceDate);
+        await bookSessionForStudent(sessionId, uid);
+        const usage = getWeeklyUsageForStudent(uid, referenceDate);
         const message = `Reserva confirmada. Restam ${usage.remaining} aulas esta semana.`;
         setStatusMessage(message);
         Alert.alert('Reserva confirmada', message);
@@ -148,9 +147,9 @@ export default function ClassDetailsScreen() {
     });
   };
 
-  const activePlan = currentStudentId ? getActivePlanForStudent(currentStudentId) : undefined;
+  const activePlan = uid ? getActivePlanForStudent(uid) : undefined;
   const remainingThisWeek = currentWeekUsage?.remaining ?? 0;
-  const canEnroll = Boolean(currentStudentId && activePlan && remainingThisWeek > 0);
+  const canEnroll = Boolean(uid && activePlan && remainingThisWeek > 0 && !existingEnrollment);
 
   return (
     <SafeAreaView style={[styles.safeArea ,{paddingTop: insets.top}]} edges={['left', 'right', 'bottom']}>
@@ -205,7 +204,7 @@ export default function ClassDetailsScreen() {
           </ThemedText>
           <Pressable style={[styles.primaryButton, !canEnroll && styles.primaryButtonDisabled]} onPress={handleEnroll} disabled={!canEnroll}>
             <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
-              {existingEnrollment ? 'Atualizar inscrição' : 'Inscrever nesta aula'}
+              {existingEnrollment ? 'Inscrito' : 'Inscrever nesta aula'}
             </ThemedText>
           </Pressable>
           {!activePlan && (
@@ -241,8 +240,8 @@ export default function ClassDetailsScreen() {
           <View style={{ gap: 10 }}>
             {upcomingSessions.map((session) => {
               const sessionDate = new Date(session.startTime);
-              const usage = currentStudentId ? getWeeklyUsageForStudent(currentStudentId, sessionDate) : null;
-              const booked = currentStudentId ? isSessionBooked(session.id, currentStudentId) : false;
+              const usage = uid ? getWeeklyUsageForStudent(uid, sessionDate) : null;
+              const booked = uid ? isSessionBooked(session.id, uid) : false;
               const remaining = usage?.remaining ?? 0;
 
               return (
@@ -263,7 +262,7 @@ export default function ClassDetailsScreen() {
                     </View>
                     <Pressable
                       style={[styles.primaryButton, (booked || remaining <= 0) && styles.primaryButtonDisabled]}
-                      disabled={booked || remaining <= 0 || !currentStudentId}
+                      disabled={booked || remaining <= 0 || !uid}
                       onPress={() => handleBookSession(session.id, sessionDate)}>
                       <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
                         {booked ? 'Já reservado' : remaining <= 0 ? 'Limite da semana' : 'Reservar'}

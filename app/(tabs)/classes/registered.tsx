@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,25 +13,20 @@ import { useInstructorData } from '@/providers/instructor-data-provider';
 export default function RegisteredClassesScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const uid = user?.uid ?? null;
   const { classes, sessions, enrollments, ensureStudentProfile } = useInstructorData();
-  const [studentId, setStudentId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      void (async () => {
-        const profile = await ensureStudentProfile(user.email, user.displayName);
-        setStudentId(user.uid ?? profile.id);
-      })();
-    }
+    if (!user) return;
+    void ensureStudentProfile(user.email, user.displayName);
   }, [ensureStudentProfile, user]);
 
-  const studentEnrollments = useMemo(
-    () =>
-      enrollments.filter(
-        (enrollment) => enrollment.studentId === studentId && enrollment.status !== 'cancelled',
-      ),
-    [enrollments, studentId],
-  );
+  const studentEnrollments = useMemo(() => {
+    if (!uid) return [];
+    return enrollments.filter(
+      (enrollment) => enrollment.studentUid === uid && enrollment.status !== 'cancelled',
+    );
+  }, [enrollments, uid]);
 
   const enrolledClasses = useMemo(
     () =>

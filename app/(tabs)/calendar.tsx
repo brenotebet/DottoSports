@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Link, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
+import { Link, useRouter } from 'expo-router';
 
 const weekDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const monthNames = [
@@ -44,7 +44,7 @@ export default function CalendarScreen() {
 
   const instructorNameFor = useCallback((instructorId?: string) => {
     if (!instructorId) return 'Coach';
-    const profile = instructorProfiles.find((item) => item.id === instructorId || item.userId === instructorId);
+    const profile = instructorProfiles.find((item) => item.id === instructorId || item.uid === instructorId);
     if (profile) return profile.fullName;
     return 'Coach';
   }, [instructorProfiles]);

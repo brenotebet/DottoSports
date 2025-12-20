@@ -1,6 +1,6 @@
 import { Link, type Href } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View, Pressable, Alert, RefreshControl } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -18,7 +18,6 @@ export default function DashboardScreen() {
   const {
     sessions,
     classes,
-    ensureStudentProfile,
     getEnrollmentForStudent,
     recordCheckIn,
     getCapacityUsage,
@@ -30,22 +29,12 @@ export default function DashboardScreen() {
     goals,
     reloadFromStorage,
   } = useInstructorData();
-  const [studentId, setStudentId] = useState<string | null>(null);
   const [checkInStatus, setCheckInStatus] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      void (async () => {
-        const profile = await ensureStudentProfile(user.email, user.displayName);
-        setStudentId(user.uid ?? profile.id);
-      })();
-    }
-  }, [ensureStudentProfile, user]);
-
   const studentAccount = useMemo(
-    () => (studentId ? getStudentAccountSnapshot(studentId) : null),
-    [getStudentAccountSnapshot, studentId],
+    () => (user?.uid ? getStudentAccountSnapshot(user.uid) : null),
+    [getStudentAccountSnapshot, user?.uid],
   );
 
   const studentEnrollments = useMemo(
@@ -53,15 +42,12 @@ export default function DashboardScreen() {
     [studentAccount],
   );
 
-  const bookingsForStudent = useMemo(
-    () =>
-      studentId
-        ? sessionBookings.filter(
-            (booking) => booking.studentId === studentId && booking.status === 'booked',
-          )
-        : [],
-    [sessionBookings, studentId],
-  );
+  const bookingsForStudent = useMemo(() => {
+    const uid = user?.uid;
+    if (!uid) return [];
+    return sessionBookings.filter((b) => b.studentUid === uid && b.status === 'booked');
+  }, [sessionBookings, user?.uid]);
+
 
   const upcomingBookedSession = useMemo(() => {
     const now = Date.now();
@@ -113,15 +99,17 @@ export default function DashboardScreen() {
   }, [sessionClass?.title, upcomingSession]);
 
   const enrollment = useMemo(() => {
-    if (!studentId || !upcomingSession) return null;
-    return getEnrollmentForStudent(studentId, upcomingSession.classId) ?? null;
-  }, [getEnrollmentForStudent, studentId, upcomingSession]);
+    const uid = user?.uid;
+    const classId = upcomingSession?.classId;
+    if (!uid || !classId) return null;
+      return getEnrollmentForStudent(uid, classId) ?? null;
+    }, [getEnrollmentForStudent, user?.uid, upcomingSession?.classId]);
 
   const nextPayment = studentAccount?.nextPayment;
 
   const activePlan = useMemo(
-    () => (studentId ? getActivePlanForStudent(studentId) : undefined),
-    [getActivePlanForStudent, studentId],
+    () => (user?.uid ? getActivePlanForStudent(user.uid) : undefined),
+    [getActivePlanForStudent, user?.uid],
   );
 
   const activePlanOption = useMemo(
@@ -130,16 +118,16 @@ export default function DashboardScreen() {
   );
 
   const weeklyUsage = useMemo(
-    () => (studentId ? getWeeklyUsageForStudent(studentId) : null),
-    [getWeeklyUsageForStudent, studentId],
+    () => (user?.uid ? getWeeklyUsageForStudent(user.uid) : null),
+    [getWeeklyUsageForStudent, user?.uid],
   );
 
   const activeGoals = useMemo(
     () =>
       goals
-        .filter((goal) => goal.studentId === studentId && goal.status === 'active')
+        .filter((goal) => goal.studentUid === user?.uid && goal.status === 'active')
         .slice(0, 3),
-    [goals, studentId],
+    [goals, user?.uid],
   );
 
   const handleReload = useCallback(async () => {
@@ -170,7 +158,7 @@ export default function DashboardScreen() {
   const canCheckIn = Boolean(enrollment && upcomingSession);
 
   const handleQuickCheckIn = () => {
-    if (!studentId || !upcomingSession || !enrollment) {
+    if (!user?.uid || !upcomingSession || !enrollment) {
       const message = 'Inscreva-se primeiro para habilitar o check-in.';
       setCheckInStatus(message);
       Alert.alert('Check-in indisponível', message);

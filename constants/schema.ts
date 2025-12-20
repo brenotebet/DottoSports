@@ -1,7 +1,7 @@
 export type UserRole = 'ADMIN' | 'INSTRUCTOR' | 'STUDENT';
 
 export type UserAccount = {
-  id: string;
+  uid: string;
   email: string;
   role: UserRole;
   status: 'active' | 'inactive' | 'invited';
@@ -11,7 +11,7 @@ export type UserAccount = {
 
 export type InstructorProfile = {
   id: string;
-  userId: string;
+  uid: string;
   fullName: string;
   bio: string;
   specialties: string[];
@@ -28,7 +28,7 @@ export type InstructorProfile = {
 
 export type StudentProfile = {
   id: string;
-  userId: string;
+  uid: string;
   fullName: string;
   phone: string;
   birthDate: string;
@@ -74,7 +74,6 @@ export type PlanOption = {
 export type StudentPlan = {
   id: string;
   studentUid: string;
-  studentId?: string;
   planOptionId: string;
   billing: 'upfront' | 'recurring';
   startDate: string;
@@ -85,7 +84,6 @@ export type StudentPlan = {
 export type SessionBooking = {
   id: string;
   studentUid: string;
-  studentId?: string;
   sessionId: string;
   weekStart: string;
   createdAt: string;
@@ -95,7 +93,6 @@ export type SessionBooking = {
 export type CreditReinstatement = {
   id: string;
   studentUid: string;
-  studentId?: string;
   weekStart: string;
   amount: number;
   createdAt: string;
@@ -116,7 +113,6 @@ export type ClassSession = {
 export type Enrollment = {
   id: string;
   studentUid: string;
-  studentId?: string;
   classId: string;
   status: 'active' | 'waitlist' | 'cancelled';
   createdAt: string;
@@ -135,7 +131,6 @@ export type Attendance = {
 export type Payment = {
   id: string;
   studentUid: string;
-  studentId?: string;
   enrollmentId?: string;
   amount: number;
   currency: 'USD' | 'BRL' | 'EUR';
@@ -150,6 +145,7 @@ export type Payment = {
 
 export type PaymentIntent = {
   id: string;
+  studentUid: string;
   paymentId: string;
   enrollmentId: string;
   amount: number;
@@ -161,6 +157,7 @@ export type PaymentIntent = {
 
 export type PaymentSession = {
   id: string;
+  studentUid: string;
   intentId: string;
   status: 'open' | 'completed' | 'expired';
   checkoutUrl: string;
@@ -172,6 +169,7 @@ export type PaymentSession = {
 
 export type Invoice = {
   id: string;
+  studentUid: string;
   paymentId: string;
   enrollmentId: string;
   issueDate: string;
@@ -184,6 +182,7 @@ export type Invoice = {
 
 export type Receipt = {
   id: string;
+  studentUid: string;
   paymentId: string;
   enrollmentId: string;
   issuedAt: string;
@@ -216,7 +215,6 @@ export type EvaluationQuestionnaire = {
 export type Evaluation = {
   id: string;
   studentUid: string;
-  studentId?: string;
   date: string;
   questionnaire: EvaluationQuestionnaire;
   notes?: string;
@@ -225,7 +223,6 @@ export type Evaluation = {
 export type Goal = {
   id: string;
   studentUid: string;
-  studentId?: string;
   target: string;
   metric: string;
   startDate: string;

@@ -81,7 +81,7 @@ export default function ClassRosterDetailScreen() {
     );
   };
 
-  const handleReinstateCredit = (studentId: string) => {
+  const handleReinstateCredit = (uid: string) => {
     if (!nextSession) return;
     const weekStart = startOfWeek(new Date(nextSession.startTime));
     Alert.alert(
@@ -92,7 +92,7 @@ export default function ClassRosterDetailScreen() {
         {
           text: 'Repor crédito',
           onPress: () => {
-            reinstateClassForWeek(studentId, weekStart, 1, 'Reposição manual pelo instrutor');
+            reinstateClassForWeek(uid, weekStart, 1, 'Reposição manual pelo instrutor');
             Alert.alert('Crédito reposto', 'Adicionamos +1 aula disponível nesta semana.');
           },
         },
