@@ -153,6 +153,7 @@ export default function DashboardScreen() {
           ? 'Sem aulas inscritas no momento'
           : 'Precisa inscrever'),
     },
+    { label: 'Personal training', value: 'Solicitar 1:1', href: '/personal-training' },
   ];
   const hasEnrollments = studentEnrollments.length > 0;
   const canCheckIn = Boolean(enrollment && upcomingSession);

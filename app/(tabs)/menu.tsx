@@ -35,6 +35,11 @@ export default function MenuScreen() {
           description: 'Consulte seu intake e o histórico enviado pelo instrutor.',
           href: '/evaluations' as const,
         },
+        {
+          title: 'Personal training',
+          description: 'Solicite aulas individuais com horários e objetivo.',
+          href: '/personal-training' as const,
+        },
       ]
     : [];
 
