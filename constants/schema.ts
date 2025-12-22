@@ -41,6 +41,19 @@ export type StudentProfile = {
   };
 };
 
+export type PersonalTrainingRequest = {
+  id: string;
+  studentUid: string;
+  timesPerWeek: number;
+  preferredTimes: string;
+  goal: string;
+  gym: string;
+  notes?: string;
+  status: 'pending' | 'contacted';
+  createdAt: string;
+  contactedAt?: string;
+};
+
 export type TrainingClass = {
   id: string;
   title: string;
@@ -251,4 +264,5 @@ export type DatabaseSchema = {
   studentPlans: StudentPlan[];
   sessionBookings: SessionBooking[];
   creditReinstatements: CreditReinstatement[];
+  trainingRequests: PersonalTrainingRequest[];
 };

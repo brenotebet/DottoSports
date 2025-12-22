@@ -9,7 +9,7 @@ import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 export default function InstructorDashboardScreen() {
-  const { sessions, classes, rosterByClass } = useInstructorData();
+  const { sessions, classes, rosterByClass, trainingRequests } = useInstructorData();
   const insets = useSafeAreaInsets();
 
   const upcomingSessions = sessions.slice(0, 3);
@@ -26,6 +26,8 @@ export default function InstructorDashboardScreen() {
       status: entry.paymentStatus,
       label: entry.paymentLabel,
     }));
+
+  const pendingPersonalRequests = trainingRequests.filter((item) => item.status === 'pending');
 
   return (
     <SafeAreaView
@@ -173,6 +175,24 @@ export default function InstructorDashboardScreen() {
               </View>
             ))}
           </View>
+        </ThemedView>
+
+        <ThemedView style={styles.card}>
+          <ThemedText type="subtitle">Pedidos de personal</ThemedText>
+          <ThemedText style={styles.muted}>
+            Veja solicitações de treinamento individual e marque quando já tiver contatado o cliente.
+          </ThemedText>
+          <View style={styles.requestRow}>
+            <ThemedText type="title">{pendingPersonalRequests.length}</ThemedText>
+            <ThemedText style={styles.muted}>pendente(s) para retorno</ThemedText>
+          </View>
+          <Link href="/instructor/training-requests" asChild>
+            <Pressable style={styles.linkButton}>
+              <ThemedText type="defaultSemiBold" style={styles.linkButtonText}>
+                Abrir pedidos
+              </ThemedText>
+            </Pressable>
+          </Link>
         </ThemedView>
       </ScrollView>
     </SafeAreaView>
@@ -363,5 +383,10 @@ const styles = StyleSheet.create({
   },
   paymentLinkText: {
     color: '#0b3b5a',
+  },
+  requestRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
   },
 });

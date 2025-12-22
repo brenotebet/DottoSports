@@ -23,6 +23,7 @@ import type {
   Evaluation,
   Goal,
   InstructorProfile,
+  PersonalTrainingRequest,
   Invoice,
   Payment,
   PaymentIntent,
@@ -116,6 +117,7 @@ type InstructorDataContextValue = {
   creditReinstatements: CreditReinstatement[];
   evaluations: Evaluation[];
   goals: Goal[];
+  trainingRequests: PersonalTrainingRequest[];
   instructorProfiles: InstructorProfile[];
   events: SystemEvent[];
   analytics: AnalyticsSnapshot;
@@ -192,6 +194,10 @@ type InstructorDataContextValue = {
   deleteGoal: (id: string) => Promise<void>;
   getStudentProfileForEmail: (email: string, displayName?: string) => Promise<StudentProfile>;
   getStudentEvaluations: (studentUid: string) => Evaluation[];
+  createTrainingRequest: (
+    payload: Omit<PersonalTrainingRequest, 'id' | 'studentUid' | 'status' | 'createdAt' | 'contactedAt'>,
+  ) => Promise<PersonalTrainingRequest>;
+  markTrainingRequestContacted: (id: string) => Promise<void>;
 };
 
 const InstructorDataContext = createContext<InstructorDataContextValue | undefined>(undefined);
@@ -313,6 +319,7 @@ export function InstructorDataProvider({ children }: { children: ReactNode }) {
   const [settlements, setSettlements] = useState<Settlement[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [trainingRequests, setTrainingRequests] = useState<PersonalTrainingRequest[]>([]);
   const [planOptions, setPlanOptions] = useState<PlanOption[]>([]);
   const [studentPlans, setStudentPlans] = useState<StudentPlan[]>([]);
   const [sessionBookings, setSessionBookings] = useState<SessionBooking[]>([]);
@@ -500,6 +507,7 @@ const isSessionBooked = useCallback(
       subscribe<SessionBooking>('sessionBookings', setSessionBookings);
       subscribe<CreditReinstatement>('creditReinstatements', setCreditReinstatements);
       subscribe<StudentProfile>('studentProfiles', setStudents);
+      subscribe<PersonalTrainingRequest>('trainingRequests', setTrainingRequests);
       subscribe<Payment>('payments', setPayments);
       subscribe<Invoice>('invoices', setInvoices);
       subscribe<PaymentIntent>('paymentIntents', setPaymentIntents);
@@ -518,6 +526,7 @@ const isSessionBooked = useCallback(
       subscribeStudentOwned<Payment>('payments', setPayments);
       subscribeStudentOwned<Evaluation>('evaluations', setEvaluations);
       subscribeStudentOwned<Goal>('goals', setGoals);
+      subscribeStudentOwned<PersonalTrainingRequest>('trainingRequests', setTrainingRequests);
       void syncCurrentUserRecord();
     }
 
@@ -564,6 +573,7 @@ const isSessionBooked = useCallback(
       fetchCollection<ClassSession>('sessions', setSessions),
       fetchCollection<PlanOption>('planOptions', filterPlanOptions),
       fetchCollection<InstructorProfile>('instructorProfiles', setInstructorProfiles),
+      fetchCollection<PersonalTrainingRequest>('trainingRequests', setTrainingRequests),
     ];
 
     if (isInstructor) {
@@ -574,6 +584,7 @@ const isSessionBooked = useCallback(
         fetchCollection<SessionBooking>('sessionBookings', setSessionBookings),
         fetchCollection<CreditReinstatement>('creditReinstatements', setCreditReinstatements),
         fetchCollection<StudentProfile>('studentProfiles', setStudents),
+        fetchCollection<PersonalTrainingRequest>('trainingRequests', setTrainingRequests),
         fetchCollection<Payment>('payments', setPayments),
         fetchCollection<Invoice>('invoices', setInvoices),
         fetchCollection<PaymentIntent>('paymentIntents', setPaymentIntents),
@@ -594,6 +605,7 @@ const isSessionBooked = useCallback(
         fetchStudentOwned<Payment>('payments', setPayments),
         fetchStudentOwned<Evaluation>('evaluations', setEvaluations),
         fetchStudentOwned<Goal>('goals', setGoals),
+        fetchStudentOwned<PersonalTrainingRequest>('trainingRequests', setTrainingRequests),
       );
       baseCollections.push(syncCurrentUserRecord());
     }
@@ -1557,6 +1569,43 @@ const cancelEnrollment = useCallback(
     [evaluations, resolveCachedStudentIdentity],
   );
 
+  const createTrainingRequest = useCallback(
+    async (
+      payload: Omit<PersonalTrainingRequest, 'id' | 'studentUid' | 'status' | 'createdAt' | 'contactedAt'>,
+    ) => {
+      const { studentUid } = await resolveStudentIdentity();
+      const newRequest: PersonalTrainingRequest = {
+        ...payload,
+        id: createCollectionId('trainingRequests'),
+        studentUid,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      await saveDocument('trainingRequests', newRequest);
+      return newRequest;
+    },
+    [createCollectionId, resolveStudentIdentity, saveDocument],
+  );
+
+  const markTrainingRequestContacted = useCallback(
+    async (id: string) => {
+      const now = new Date().toISOString();
+      try {
+        await updateDoc(doc(db, 'trainingRequests', id), { status: 'contacted', contactedAt: now });
+      } catch (error) {
+        if (!isPermissionDenied(error)) {
+          throw error;
+        }
+        setTrainingRequests((current) =>
+          current.map((request) =>
+            request.id === id ? { ...request, status: 'contacted', contactedAt: now } : request,
+          ),
+        );
+      }
+    },
+    [],
+  );
+
   const chargeStoredCard = useCallback(
     async (studentUid: string, amount: number, description: string) => {
       if (!isInstructor) {
@@ -1861,6 +1910,7 @@ const cancelEnrollment = useCallback(
       creditReinstatements,
       evaluations,
       goals,
+      trainingRequests,
       events,
       analytics,
       outstandingBalances,
@@ -1905,6 +1955,8 @@ const cancelEnrollment = useCallback(
       updateGoal,
       deleteGoal,
       getStudentEvaluations,
+      createTrainingRequest,
+      markTrainingRequestContacted,
     }),
     [
       classes,
@@ -1924,6 +1976,7 @@ const cancelEnrollment = useCallback(
       creditReinstatements,
       evaluations,
       goals,
+      trainingRequests,
       events,
       analytics,
       outstandingBalances,
@@ -1961,6 +2014,8 @@ const cancelEnrollment = useCallback(
       updateGoal,
       deleteGoal,
       getStudentEvaluations,
+      createTrainingRequest,
+      markTrainingRequestContacted,
     ],
   );
 
