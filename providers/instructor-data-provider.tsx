@@ -1465,19 +1465,44 @@ const getWeeklyUsageForStudent = useCallback(
     await updateDoc(doc(db, 'enrollments', enrollmentId), { status, updatedAt: new Date().toISOString() });
   }, []);
 
-    const cancelEnrollment = useCallback(
-      async (enrollmentId: string) => {
-        const nowIso = new Date().toISOString();
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
 
-        await updateDoc(doc(db, 'enrollments', enrollmentId), {
-          status: 'cancelled',
-          updatedAt: nowIso,
-        });
+    const getNextSessionForClass = (classId: string) => {
+      const now = Date.now();
+      return sessions
+        .filter((s) => s.classId === classId && new Date(s.startTime).getTime() >= now)
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+    };
 
-        logEvent('enrollment_cancelled', 'Inscrição cancelada pelo aluno.', { enrollmentId });
-      },
-      [logEvent],
-    );
+const cancelEnrollment = useCallback(
+  async (enrollmentId: string) => {
+    const enrollment = enrollments.find((e) => e.id === enrollmentId);
+    if (!enrollment) throw new Error('Matrícula não encontrada.');
+
+    const nextSession = getNextSessionForClass(enrollment.classId);
+    if (nextSession) {
+      const timeUntilClass =
+        new Date(nextSession.startTime).getTime() - Date.now();
+
+      if (timeUntilClass < SIX_HOURS_MS) {
+        throw new Error(
+          'Cancelamentos só são permitidos até 6 horas antes da aula.'
+        );
+      }
+    }
+
+    await updateDoc(doc(db, 'enrollments', enrollmentId), {
+      status: 'cancelled',
+      updatedAt: new Date().toISOString(),
+    });
+
+    logEvent('enrollment_cancelled', 'Inscrição cancelada pelo aluno.', {
+      enrollmentId,
+    });
+  },
+  [enrollments, sessions, logEvent],
+);
+
 
 
   const createEvaluation = useCallback(
