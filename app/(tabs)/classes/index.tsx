@@ -74,7 +74,7 @@ export default function ClassCatalogScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top }]}
-      edges={[ 'top', 'left', 'right', 'bottom']}>
+      edges={[ 'left', 'right', 'bottom']}>
       <TopBar title="Catálogo de aulas" />
       <ScrollView
         contentContainerStyle={styles.container}

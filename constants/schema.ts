@@ -1,7 +1,7 @@
 export type UserRole = 'ADMIN' | 'INSTRUCTOR' | 'STUDENT';
 
 export type UserAccount = {
-  uid: string;
+  id: string;
   email: string;
   role: UserRole;
   status: 'active' | 'inactive' | 'invited';
@@ -28,7 +28,7 @@ export type InstructorProfile = {
 
 export type StudentProfile = {
   id: string;
-  uid: string;
+  userId: string;
   fullName: string;
   phone: string;
   birthDate: string;

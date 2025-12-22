@@ -379,6 +379,19 @@ const resolveCachedStudentIdentity = useCallback(
   [],
 );
 
+const isSessionBooked = useCallback(
+  (sessionId: string, studentUid: string) => {
+    const identity = resolveCachedStudentIdentity(studentUid);
+    return sessionBookings.some(
+      (booking) =>
+        booking.sessionId === sessionId &&
+        matchesStudentIdentity(booking, identity) &&
+        booking.status === 'booked',
+    );
+  },
+  [resolveCachedStudentIdentity, sessionBookings],
+);
+
   const syncCurrentUserRecord = useCallback(async () => {
     if (!user) return;
 
@@ -397,7 +410,7 @@ const resolveCachedStudentIdentity = useCallback(
     const nowIso = new Date().toISOString();
     setUsers([
       {
-        uid: user.uid,
+        id: user.uid,
         email: user.email,
         role: user.role,
         status: 'active',
@@ -453,6 +466,27 @@ const resolveCachedStudentIdentity = useCallback(
 
       subscriptions.push(unsubscribe);
     };
+
+    console.log('[InstructorDataProvider] initializing=', initializing, 'auth uid=', user?.uid, 'role=', user?.role);
+
+    (async () => {
+    try {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      console.log(
+        '[ROLE CHECK] auth role=',
+        user.role,
+        'firestore role=',
+        snap.data()?.role,
+        'exists=',
+        snap.exists(),
+      );
+    } catch (e) {
+      console.warn('[ROLE CHECK] failed to read /users doc', e);
+    }
+  })();
+
+    
+
 
     subscribe<TrainingClass>('classes', setClasses);
     subscribe<ClassSession>('sessions', setSessions);
@@ -590,13 +624,13 @@ const ensureStudentProfile = useCallback(
     if (!user) throw new Error('Você precisa estar autenticado.');
 
     // if already in memory
-    const existing = students.find((p) => p.id === user.uid);
+    const existing = students.find((p) => p.userId === user.uid || p.id === user.uid);
     if (existing) return existing;
 
     const profileId = user.uid;
     const profile: StudentProfile = {
       id: profileId,
-      uid: user.uid,
+      userId: user.uid,
       fullName: displayName || email || user.displayName || user.email,
       phone: '+55 11 99999-0000',
       birthDate: '1995-01-01',
@@ -617,56 +651,58 @@ const ensureStudentProfile = useCallback(
 );
 
 
-  const saveDocument = useCallback(
-  async <T extends { id: string }>(path: string, payload: T) => {
-    try {
-      await setDoc(doc(db, path, payload.id), payload);
-      return;
-    } catch (error) {
-      console.warn(`Save for ${path} failed; applying local fallback`, error);
-      if (!isPermissionDenied(error)) throw error;
+    const saveDocument = useCallback(
+    async <T extends { id: string }>(path: string, payload: T) => {
+      const STUDENT_OWNED = new Set([
+        'studentPlans',
+        'payments',
+        'invoices',
+        'paymentIntents',
+        'paymentSessions',
+        'receipts',
+        'goals',
+        'evaluations',
+        'enrollments',
+        'sessionBookings',
+        'creditReinstatements',
+      ]);
 
-      // ✅ use the same event logger everywhere
-      logEvent('validation_error', `Fallback gravado localmente para ${path}`, { path, id: payload.id });
-
-      if (path === 'studentPlans') {
-        setStudentPlans((current) => {
-          const others = current.filter((item) => item.id !== payload.id);
-          return [...others, payload as unknown as StudentPlan];
-        });
-        return;
+      if (STUDENT_OWNED.has(path)) {
+        const studentUid = (payload as any).studentUid;
+        if (!studentUid) {
+          throw new Error(`[saveDocument] Missing studentUid for ${path}/${payload.id}`);
+        }
       }
 
-      if (path === 'payments') {
-        setPayments((current) => {
-          const others = current.filter((item) => item.id !== payload.id);
-          return [...others, payload as unknown as Payment];
-        });
+      try {
+        await setDoc(doc(db, path, payload.id), payload, { merge: true }); // ✅ IMPORTANT
         return;
-      }
+      } catch (error) {
+        console.warn(`Save for ${path} failed`, error);
+        if (!isPermissionDenied(error)) throw error;
 
-      if (path === 'invoices') {
-        setInvoices((current) => {
-          const others = current.filter((item) => item.id !== payload.id);
-          return [...others, payload as unknown as Invoice];
-        });
-        return;
-      }
+        // ✅ Do not hide persistence failures for critical flows
+        if (path === 'studentPlans' || path === 'payments' || path === 'invoices') {
+          throw error;
+        }
 
-      if (path === 'sessionBookings') {
-        setSessionBookings((current) => {
-          const others = current.filter((item) => item.id !== payload.id);
-          return [...others, payload as unknown as SessionBooking];
-        });
-        return;
-      }
+        logEvent('validation_error', `Fallback gravado localmente para ${path}`, { path, id: payload.id });
 
-      // fallback unknown paths
-      throw error;
-    }
-  },
-  [logEvent],
-);
+        if (path === 'sessionBookings') {
+          setSessionBookings((current) => {
+            const others = current.filter((item) => item.id !== payload.id);
+            return [...others, payload as unknown as SessionBooking];
+          });
+          return;
+        }
+
+        // fallback unknown paths
+        throw error;
+      }
+    },
+    [logEvent],
+  );
+
 
   const chunkArray = useCallback(<T,>(items: T[], size = 10) => {
     const chunks: T[][] = [];
@@ -854,47 +890,74 @@ const ensureStudentProfile = useCallback(
     ],
   );
 
-  const getWeeklyUsageForStudent = useCallback(
-    (studentUid: string, referenceDate = new Date()) => {
-      const identity = resolveCachedStudentIdentity(studentUid);
-      const activePlan = getActivePlanForStudent(identity.studentUid);
-      const weekStart = startOfWeekIso(referenceDate);
-      const reinstated = creditReinstatements
-        .filter((item) => matchesStudentIdentity(item, identity) && item.weekStart === weekStart)
-        .reduce((sum, item) => sum + item.amount, 0);
-      const limit = (activePlan?.planOptionId
-        ? planOptions.find((item) => item.id === activePlan.planOptionId)?.weeklyClasses ?? 0
-        : 0) + reinstated;
+const getWeeklyUsageForStudent = useCallback(
+  (studentUid: string, referenceDate = new Date()) => {
+    const identity = resolveCachedStudentIdentity(studentUid);
+    const weekStart = startOfWeekIso(referenceDate);
 
-      const bookingsThisWeek = sessionBookings.filter(
-        (booking) =>
-          matchesStudentIdentity(booking, identity) && booking.weekStart === weekStart && booking.status === 'booked',
-      ).length;
+    const activePlan = getActivePlanForStudent(identity.studentUid);
 
-      const enrollmentsThisWeek = enrollments.filter(
-        (enrollment) =>
-          matchesStudentIdentity(enrollment, identity) &&
-          enrollment.status !== 'cancelled' &&
-          startOfWeekIso(new Date(enrollment.createdAt)) === weekStart,
-      ).length;
+    // Credits reinstated by instructor/admin
+    const reinstated = creditReinstatements
+      .filter((item) => matchesStudentIdentity(item, identity) && item.weekStart === weekStart)
+      .reduce((sum, item) => sum + item.amount, 0);
 
-      const used = Math.max(bookingsThisWeek, enrollmentsThisWeek);
+    const baseLimit =
+      activePlan?.planOptionId
+        ? planOptions.find((opt) => opt.id === activePlan.planOptionId)?.weeklyClasses ?? 0
+        : 0;
 
-      return { used, limit, remaining: Math.max(limit - used, 0), weekStart };
-    },
-    [creditReinstatements, enrollments, getActivePlanForStudent, planOptions, resolveCachedStudentIdentity, sessionBookings],
-  );
+    const limit = baseLimit + reinstated;
 
-  const isSessionBooked = useCallback(
-    (sessionId: string, studentUid: string) => {
-      const identity = resolveCachedStudentIdentity(studentUid);
-      return sessionBookings.some(
-        (booking) =>
-          booking.sessionId === sessionId && matchesStudentIdentity(booking, identity) && booking.status === 'booked',
-      );
-    },
-    [resolveCachedStudentIdentity, sessionBookings],
-  );
+    // --- 1) Bookings consume credit (best signal) ---
+    const bookedThisWeek = sessionBookings.filter(
+      (b) =>
+        matchesStudentIdentity(b, identity) &&
+        b.weekStart === weekStart &&
+        b.status === 'booked',
+    );
+
+    // Map booking -> classId (via session)
+    const bookedClassIds = new Set<string>();
+    for (const booking of bookedThisWeek) {
+      const session = sessions.find((s) => s.id === booking.sessionId);
+      if (session?.classId) bookedClassIds.add(session.classId);
+      else {
+        // fallback if session not in memory for some reason
+        bookedClassIds.add(`unknown-session:${booking.sessionId}`);
+      }
+    }
+
+    // --- 2) Enrollments as fallback consumption signal ---
+    // Count ONLY active enrollments created in this week AND not already counted by a booking.
+    // (Waitlist does not consume credits.)
+    const enrolledThisWeek = enrollments.filter((e) => {
+      if (!matchesStudentIdentity(e, identity)) return false;
+      if (e.status !== 'active') return false;
+
+      const enrollmentWeekStart = startOfWeekIso(new Date(e.createdAt));
+      if (enrollmentWeekStart !== weekStart) return false;
+
+      // Dedup: if student already booked a session for this class this week, don't count enrollment too
+      return !bookedClassIds.has(e.classId);
+    });
+
+    const used = bookedClassIds.size + enrolledThisWeek.length;
+    const remaining = Math.max(limit - used, 0);
+
+    return { used, limit, remaining, weekStart };
+  },
+  [
+    creditReinstatements,
+    enrollments,
+    getActivePlanForStudent,
+    planOptions,
+    resolveCachedStudentIdentity,
+    sessionBookings,
+    sessions,
+  ],
+);
+
 
   const bookSessionForStudent = useCallback(
     async (sessionId: string, studentUid: string) => {
@@ -1100,7 +1163,7 @@ const ensureStudentProfile = useCallback(
   const resolveRosterStudent = useCallback(
     (enrollment: Enrollment): StudentProfile => {
       const student = students.find(
-        (item) => item.id === enrollment.studentUid || item.uid === enrollment.studentUid,
+        (item) => item.id === enrollment.studentUid || item.userId === enrollment.studentUid,
       );
       if (student) return student;
 
@@ -1108,7 +1171,7 @@ const ensureStudentProfile = useCallback(
       const suffix = fallbackId.slice(-4) || fallbackId;
       return {
         id: fallbackId,
-        uid: enrollment.studentUid ?? fallbackId,
+        userId: enrollment.studentUid ?? fallbackId,
         fullName: `Aluno inscrito #${suffix}`,
         phone: '',
         birthDate: '',
@@ -1153,10 +1216,10 @@ const ensureStudentProfile = useCallback(
       .map((payment) => {
         const invoice = invoices.find((item) => item.paymentId === payment.id);
         const student = students.find(
-          (item) => item.id === payment.studentUid || item.uid === payment.studentUid,
+          (item) => item.id === payment.studentUid || item.userId === payment.studentUid,
         );
-        const ownerUserId = student?.uid ?? payment.studentUid;
-        const email = users.find((account) => account.uid === ownerUserId)?.email;
+        const ownerUserId = student?.userId ?? payment.studentUid;
+        const email = users.find((account) => account.id === ownerUserId)?.email;
         const isOverdue = new Date(payment.dueDate) < new Date();
         return {
           payment,
@@ -1402,34 +1465,20 @@ const ensureStudentProfile = useCallback(
     await updateDoc(doc(db, 'enrollments', enrollmentId), { status, updatedAt: new Date().toISOString() });
   }, []);
 
-  const cancelEnrollment = useCallback(
-    async (enrollmentId: string) => {
-      const nowIso = new Date().toISOString();
-      const batch = writeBatch(db);
+    const cancelEnrollment = useCallback(
+      async (enrollmentId: string) => {
+        const nowIso = new Date().toISOString();
 
-      batch.update(doc(db, 'enrollments', enrollmentId), { status: 'cancelled', updatedAt: nowIso });
-
-      const paymentsSnap = await getDocs(query(collection(db, 'payments'), where('enrollmentId', '==', enrollmentId)));
-      paymentsSnap.docs.forEach((snap) => {
-        const payment = snap.data() as Payment;
-        batch.update(snap.ref, {
-          status: 'failed',
-          description: payment.description ? `${payment.description} (cancelado)` : 'Pagamento cancelado',
+        await updateDoc(doc(db, 'enrollments', enrollmentId), {
+          status: 'cancelled',
+          updatedAt: nowIso,
         });
-      });
 
-      const invoicesSnap = await getDocs(query(collection(db, 'invoices'), where('enrollmentId', '==', enrollmentId)));
-      invoicesSnap.docs.forEach((snap) => {
-        const invoice = snap.data() as Invoice;
-        batch.update(snap.ref, { status: 'void', notes: invoice.notes ?? 'Cancelado pelo aluno.' });
-      });
+        logEvent('enrollment_cancelled', 'Inscrição cancelada pelo aluno.', { enrollmentId });
+      },
+      [logEvent],
+    );
 
-      await batch.commit();
-
-      logEvent('enrollment_cancelled', 'Inscrição cancelada pelo aluno.', { enrollmentId });
-    },
-    [logEvent],
-  );
 
   const createEvaluation = useCallback(
     async (payload: Omit<Evaluation, 'id'>) => {

@@ -55,7 +55,7 @@ export default function RegisteredClassesScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top }]}
-      edges={['top', 'left', 'right', 'bottom']}>
+      edges={['left', 'right', 'bottom']}>
       <TopBar title="Minhas aulas" fallbackHref="/(tabs)/classes" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>

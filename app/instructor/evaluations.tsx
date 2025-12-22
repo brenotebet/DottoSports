@@ -54,8 +54,8 @@ export default function EvaluationsScreen() {
     const seen = new Set<string>();
     return students.filter((student) => {
       // ✅ UID is the canonical identity
-      if (seen.has(student.uid)) return false;
-      seen.add(student.uid);
+      if (seen.has(student.userId)) return false;
+      seen.add(student.userId);
       return true;
     });
   }, [students]);
@@ -90,7 +90,7 @@ export default function EvaluationsScreen() {
 
   useEffect(() => {
     if (uniqueStudents.length > 0 && !selectedStudentUid) {
-      setSelectedStudentUid(uniqueStudents[0].uid);
+      setSelectedStudentUid(uniqueStudents[0].userId);
     }
   }, [selectedStudentUid, uniqueStudents]);
 
@@ -99,7 +99,7 @@ export default function EvaluationsScreen() {
   }, [resetForm, selectedStudentUid]);
 
   const selectedStudent = useMemo(
-    () => uniqueStudents.find((student) => student.uid === selectedStudentUid) ?? null,
+    () => uniqueStudents.find((student) => student.userId === selectedStudentUid) ?? null,
     [selectedStudentUid, uniqueStudents],
   );
 
@@ -115,7 +115,7 @@ export default function EvaluationsScreen() {
     return uniqueStudents
       .flatMap((student) =>
         // ✅ fetch by UID
-        getStudentEvaluations(student.uid).map((evaluation) => ({ evaluation, student })),
+        getStudentEvaluations(student.userId).map((evaluation) => ({ evaluation, student })),
       )
       .sort((a, b) => new Date(b.evaluation.date).getTime() - new Date(a.evaluation.date).getTime());
   }, [getStudentEvaluations, uniqueStudents]);
@@ -323,10 +323,10 @@ export default function EvaluationsScreen() {
                   ) : (
                     filteredStudents.map((student) => (
                       <Pressable
-                        key={student.uid}
+                        key={student.userId}
                         style={styles.dropdownItem}
                         onPress={() => {
-                          setSelectedStudentUid(student.uid);
+                          setSelectedStudentUid(student.userId);
                           setDropdownOpen(false);
                           setSearchTerm('');
                         }}>

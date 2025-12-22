@@ -19,4 +19,10 @@ let auth = (() => {
 
 const db = getFirestore(app);
 
+console.log('[FIREBASE] app name=', app.name);
+console.log('[FIREBASE] projectId=', (db as any)._databaseId?.projectId);
+console.log('[FIREBASE] auth app name=', auth.app.name);
+console.log('[FIREBASE] db app name=', (db as any)._app?.name);
+
 export { app, auth, db };
+
