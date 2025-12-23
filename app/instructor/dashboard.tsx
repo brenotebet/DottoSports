@@ -9,7 +9,7 @@ import { Colors } from '@/constants/theme';
 import { useInstructorData } from '@/providers/instructor-data-provider';
 
 export default function InstructorDashboardScreen() {
-  const { sessions, classes, rosterByClass } = useInstructorData();
+  const { sessions, classes, rosterByClass, trainingRequests } = useInstructorData();
   const insets = useSafeAreaInsets();
 
   const upcomingSessions = sessions.slice(0, 3);
@@ -18,14 +18,7 @@ export default function InstructorDashboardScreen() {
     roster: rosterByClass[trainingClass.id] ?? [],
   }));
 
-  const paymentHighlights = classRosterEntries
-    .flatMap((item) => item.roster)
-    .map((entry) => ({
-      enrollmentId: entry.enrollment.id,
-      student: entry.student,
-      status: entry.paymentStatus,
-      label: entry.paymentLabel,
-    }));
+  const pendingPersonalRequests = trainingRequests.filter((item) => item.status === 'pending');
 
   return (
     <SafeAreaView
@@ -137,42 +130,21 @@ export default function InstructorDashboardScreen() {
         </ThemedView>
 
         <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Status de pagamento</ThemedText>
+          <ThemedText type="subtitle">Pedidos de personal</ThemedText>
           <ThemedText style={styles.muted}>
-            Acompanhe rapidamente quem está em dia, pendente ou com cobranças atrasadas.
+            Veja solicitações de treinamento individual e marque quando já tiver contatado o cliente.
           </ThemedText>
-          <View style={styles.paymentList}>
-            {paymentHighlights.length === 0 && (
-              <ThemedText style={styles.muted}>Nenhum pagamento para monitorar agora.</ThemedText>
-            )}
-            {paymentHighlights.map((item) => (
-              <View key={item.enrollmentId} style={styles.paymentRow}>
-                <View style={styles.rosterText}>
-                  <ThemedText type="defaultSemiBold">{item.student.fullName}</ThemedText>
-                  <ThemedText style={styles.muted}>{item.student.phone}</ThemedText>
-                </View>
-                <ThemedView
-                  style={[
-                    styles.paymentBadge,
-                    item.status === 'paid' && styles.paymentBadgePaid,
-                    item.status === 'overdue' && styles.paymentBadgeOverdue,
-                  ]}>
-                  <ThemedText
-                    type="defaultSemiBold"
-                    style={item.status === 'paid' ? styles.paymentBadgePaidText : styles.paymentBadgeText}>
-                    {item.label}
-                  </ThemedText>
-                </ThemedView>
-                <Link href="/(tabs)/menu" asChild>
-                  <Pressable style={styles.paymentLink}>
-                    <ThemedText type="defaultSemiBold" style={styles.paymentLinkText}>
-                      Ir para cobrança
-                    </ThemedText>
-                  </Pressable>
-                </Link>
-              </View>
-            ))}
+          <View style={styles.requestRow}>
+            <ThemedText type="title">{pendingPersonalRequests.length}</ThemedText>
+            <ThemedText style={styles.muted}>pendente(s) para retorno</ThemedText>
           </View>
+          <Link href="/instructor/training-requests" asChild>
+            <Pressable style={styles.linkButton}>
+              <ThemedText type="defaultSemiBold" style={styles.linkButtonText}>
+                Abrir pedidos
+              </ThemedText>
+            </Pressable>
+          </Link>
         </ThemedView>
       </ScrollView>
     </SafeAreaView>
@@ -277,91 +249,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'flex-start',
   },
-  rosterList: {
-    gap: 10,
-  },
-  rosterRow: {
+  requestRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    flexWrap: 'wrap',
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
-  },
-  rosterText: {
-    flex: 1,
-    gap: 4,
-  },
-  rosterActions: {
-    flexDirection: 'row',
+    alignItems: 'baseline',
     gap: 8,
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  checkButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  presentButton: {
-    backgroundColor: '#0e9aed',
-    borderColor: '#0a6fa5',
-  },
-  absentButton: {
-    backgroundColor: '#fff1f1',
-    borderColor: '#ffb4b4',
-  },
-  removeButton: {
-    backgroundColor: '#ffe5e5',
-    borderColor: '#ffb4b4',
-  },
-  actionText: {
-    color: '#0b3b5a',
-  },
-  absentText: {
-    color: '#a01717',
-  },
-  paymentList: {
-    gap: 10,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.08)',
-    paddingBottom: 10,
-    flexWrap: 'wrap',
-  },
-  paymentBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: '#fff8e5',
-  },
-  paymentBadgePaid: {
-    backgroundColor: '#e7f8ed',
-  },
-  paymentBadgeOverdue: {
-    backgroundColor: '#ffe5e5',
-  },
-  paymentBadgeText: {
-    color: '#ad6c00',
-  },
-  paymentBadgePaidText: {
-    color: '#157347',
-  },
-  paymentLink: {
-    marginLeft: 'auto',
-    backgroundColor: '#0e9aed',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-  },
-  paymentLinkText: {
-    color: '#0b3b5a',
   },
 });

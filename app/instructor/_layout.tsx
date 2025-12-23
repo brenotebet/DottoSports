@@ -21,6 +21,7 @@ export default function InstructorLayout() {
       <Stack.Screen name="payments/[classId]" />
       <Stack.Screen name="rosters/index" />
       <Stack.Screen name="rosters/[classId]" />
+      <Stack.Screen name="training-requests" />
     </Stack>
   );
 }
