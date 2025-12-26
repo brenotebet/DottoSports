@@ -16,11 +16,21 @@ export default function TrainingRequestsScreen() {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
-  const renderStudentName = (studentUid: string) => {
+  const getStudentInfo = (studentUid: string) => {
     const student = students.find((item) => item.id === studentUid || item.userId === studentUid);
-    if (student) return student.fullName;
+
+    if (student) {
+      return {
+        name: student.fullName,
+        phone: student.phone || '—',
+      };
+    }
+
     const suffix = studentUid.slice(-4) || studentUid;
-    return `Aluno #${suffix}`;
+    return {
+      name: `Aluno #${suffix}`,
+      phone: '—',
+    };
   };
 
   const handleMarkContacted = async (id: string) => {
@@ -34,7 +44,7 @@ export default function TrainingRequestsScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
-      edges={['top', 'left', 'right', 'bottom']}>
+      edges={['left', 'right', 'bottom']}>
       <TopBar title="Pedidos de personal" fallbackHref="/instructor/dashboard" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
@@ -61,67 +71,79 @@ export default function TrainingRequestsScreen() {
           </ThemedView>
         ) : (
           <ThemedView style={styles.listCard}>
-            {sortedRequests.map((request) => (
-              <View key={request.id} style={styles.requestItem}>
-                <View style={styles.requestHeader}>
-                  <View>
-                    <ThemedText type="defaultSemiBold">{renderStudentName(request.studentUid)}</ThemedText>
-                    <ThemedText style={styles.mutedSmall}>
-                      {new Date(request.createdAt).toLocaleString('pt-BR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </ThemedText>
+            {sortedRequests.map((request) => {
+              const info = getStudentInfo(request.studentUid);
+
+              return (
+                <View key={request.id} style={styles.requestItem}>
+                  <View style={styles.requestHeader}>
+                    <View>
+                      <ThemedText type="defaultSemiBold">{info.name}</ThemedText>
+
+                      {/* ✅ NEW: phone (instructor convenience) */}
+                      <ThemedText style={styles.mutedSmall}>Telefone: {info.phone}</ThemedText>
+
+                      <ThemedText style={styles.mutedSmall}>
+                        {new Date(request.createdAt).toLocaleString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </ThemedText>
+                    </View>
+
+                    <ThemedView
+                      style={[
+                        styles.statusPill,
+                        request.status === 'contacted' ? styles.statusContacted : styles.statusPending,
+                      ]}>
+                      <ThemedText
+                        type="defaultSemiBold"
+                        style={request.status === 'contacted' ? styles.statusContactedText : styles.statusPendingText}>
+                        {request.status === 'contacted' ? 'Contatado' : 'Pendente'}
+                      </ThemedText>
+                    </ThemedView>
                   </View>
-                  <ThemedView
-                    style={[
-                      styles.statusPill,
-                      request.status === 'contacted' ? styles.statusContacted : styles.statusPending,
-                    ]}>
-                    <ThemedText
-                      type="defaultSemiBold"
-                      style={request.status === 'contacted' ? styles.statusContactedText : styles.statusPendingText}>
-                      {request.status === 'contacted' ? 'Contatado' : 'Pendente'}
+
+                  <View style={styles.metaRow}>
+                    <ThemedText type="defaultSemiBold">Frequência</ThemedText>
+                    <ThemedText>{request.timesPerWeek}x por semana</ThemedText>
+                  </View>
+                  <View style={styles.metaRow}>
+                    <ThemedText type="defaultSemiBold">Horários</ThemedText>
+                    <ThemedText>{request.preferredTimes}</ThemedText>
+                  </View>
+                  <View style={styles.metaRow}>
+                    <ThemedText type="defaultSemiBold">Objetivo</ThemedText>
+                    <ThemedText style={styles.mutedSmall}>{request.goal}</ThemedText>
+                  </View>
+                  <View style={styles.metaRow}>
+                    <ThemedText type="defaultSemiBold">Academia/box</ThemedText>
+                    <ThemedText>{request.gym}</ThemedText>
+                  </View>
+                  {request.notes ? (
+                    <ThemedView style={styles.noteBox}>
+                      <ThemedText type="defaultSemiBold">Observações</ThemedText>
+                      <ThemedText style={styles.mutedSmall}>{request.notes}</ThemedText>
+                    </ThemedView>
+                  ) : null}
+
+                  {request.status === 'pending' ? (
+                    <Pressable style={styles.primaryButton} onPress={() => handleMarkContacted(request.id)}>
+                      <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
+                        Marcar como contatado
+                      </ThemedText>
+                    </Pressable>
+                  ) : (
+                    <ThemedText style={styles.mutedSmall}>
+                      Marcado como contatado em{' '}
+                      {request.contactedAt ? new Date(request.contactedAt).toLocaleDateString('pt-BR') : '—'}.
                     </ThemedText>
-                  </ThemedView>
+                  )}
                 </View>
-                <View style={styles.metaRow}>
-                  <ThemedText type="defaultSemiBold">Frequência</ThemedText>
-                  <ThemedText>{request.timesPerWeek}x por semana</ThemedText>
-                </View>
-                <View style={styles.metaRow}>
-                  <ThemedText type="defaultSemiBold">Horários</ThemedText>
-                  <ThemedText>{request.preferredTimes}</ThemedText>
-                </View>
-                <View style={styles.metaRow}>
-                  <ThemedText type="defaultSemiBold">Objetivo</ThemedText>
-                  <ThemedText style={styles.mutedSmall}>{request.goal}</ThemedText>
-                </View>
-                <View style={styles.metaRow}>
-                  <ThemedText type="defaultSemiBold">Academia/box</ThemedText>
-                  <ThemedText>{request.gym}</ThemedText>
-                </View>
-                {request.notes ? (
-                  <ThemedView style={styles.noteBox}>
-                    <ThemedText type="defaultSemiBold">Observações</ThemedText>
-                    <ThemedText style={styles.mutedSmall}>{request.notes}</ThemedText>
-                  </ThemedView>
-                ) : null}
-                {request.status === 'pending' ? (
-                  <Pressable style={styles.primaryButton} onPress={() => handleMarkContacted(request.id)}>
-                    <ThemedText type="defaultSemiBold" style={styles.primaryButtonText}>
-                      Marcar como contatado
-                    </ThemedText>
-                  </Pressable>
-                ) : (
-                  <ThemedText style={styles.mutedSmall}>
-                    Marcado como contatado em {request.contactedAt ? new Date(request.contactedAt).toLocaleDateString('pt-BR') : '—'}.
-                  </ThemedText>
-                )}
-              </View>
-            ))}
+              );
+            })}
           </ThemedView>
         )}
       </ScrollView>

@@ -23,11 +23,11 @@ import type {
   Evaluation,
   Goal,
   InstructorProfile,
-  PersonalTrainingRequest,
   Invoice,
   Payment,
   PaymentIntent,
   PaymentSession,
+  PersonalTrainingRequest,
   PlanOption,
   Receipt,
   SessionBooking,
@@ -39,6 +39,10 @@ import type {
 } from '@/constants/schema';
 import { db } from '@/services/firebase';
 import { useAuth } from './auth-provider';
+
+import { functions } from '@/services/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { Linking } from 'react-native';
 
 export type RosterEntry = {
   enrollment: Enrollment;
@@ -971,8 +975,82 @@ const getWeeklyUsageForStudent = useCallback(
 );
 
 
+    const getStudentAccountSnapshot = useCallback(
+      (studentUid: string): StudentAccountSnapshot => {
+        const identity = resolveCachedStudentIdentity(studentUid);
+        const activeEnrollments = enrollments.filter(
+          (item) => matchesStudentIdentity(item, identity) && item.status !== 'cancelled',
+        );
+        const ledger = resolvePaymentLedger(payments, invoices, enrollments, identity);
+        const outstanding = ledger.filter((item) => item.status !== 'paid');
+        const nextPayment = outstanding[0];
+        const openBalance = outstanding.reduce((sum, entry) => sum + entry.payment.amount, 0);
+
+        return { enrollments: activeEnrollments, ledger, outstanding, nextPayment, openBalance };
+      },
+      [enrollments, invoices, payments, resolveCachedStudentIdentity],
+    );
+
+    const analytics = useMemo<AnalyticsSnapshot>(() => {
+      const totalRevenue = payments
+        .filter((payment) => payment.status === 'paid')
+        .reduce((sum, payment) => sum + payment.amount, 0);
+      const pendingRevenue = payments
+        .filter((payment) => payment.status !== 'paid')
+        .reduce((sum, payment) => sum + payment.amount, 0);
+
+      const utilizationByClass = classes.reduce<AnalyticsSnapshot['utilizationByClass']>((acc, trainingClass) => {
+        const active = enrollments.filter(
+          (enrollment) => enrollment.classId === trainingClass.id && enrollment.status === 'active',
+        ).length;
+        const utilization = trainingClass.capacity ? active / trainingClass.capacity : 0;
+
+        acc[trainingClass.id] = {
+          capacity: trainingClass.capacity,
+          active,
+          utilization,
+        };
+        return acc;
+      }, {});
+
+      const averageUtilization =
+        classes.length > 0
+          ? Object.values(utilizationByClass).reduce((sum, entry) => sum + entry.utilization, 0) /
+            classes.length
+          : 0;
+
+      const presentCount = attendance.filter((item) => item.status === 'present').length;
+      const attendanceRate = attendance.length ? presentCount / attendance.length : 0;
+
+      const revenueByStudent = payments.reduce<Record<string, number>>((acc, payment) => {
+        const ownerKey = payment.studentUid;
+        if (payment.status === 'paid' && ownerKey) {
+          acc[ownerKey] = (acc[ownerKey] ?? 0) + payment.amount;
+        }
+        return acc;
+      }, {});
+
+      return { totalRevenue, pendingRevenue, averageUtilization, attendanceRate, revenueByStudent, utilizationByClass };
+    }, [attendance, classes, enrollments, payments]);
+
+    const assertAccountClearForBookings = useCallback(
+    (studentUid: string) => {
+      const snapshot = getStudentAccountSnapshot(studentUid);
+
+      if (snapshot.openBalance > 0 || snapshot.outstanding.length > 0) {
+        const nextDue = snapshot.nextPayment?.payment?.dueDate;
+        throw new Error(
+          nextDue
+            ? `Pagamento pendente. Regularize até ${nextDue} para liberar inscrições e reservas.`
+            : 'Pagamento pendente. Regularize seu pagamento para liberar inscrições e reservas.',
+        );
+      }
+    },
+    [getStudentAccountSnapshot],
+    );
   const bookSessionForStudent = useCallback(
     async (sessionId: string, studentUid: string) => {
+      assertAccountClearForBookings(studentUid);
       const { studentUid: resolvedUid } = await resolveStudentIdentity(studentUid);
       const targetSession = sessions.find((item) => item.id === sessionId);
       const activePlan = getActivePlanForStudent(resolvedUid);
@@ -1020,6 +1098,7 @@ const getWeeklyUsageForStudent = useCallback(
       resolveStudentIdentity,
       saveDocument,
       sessions,
+      assertAccountClearForBookings
     ],
   );
 
@@ -1050,6 +1129,8 @@ const getWeeklyUsageForStudent = useCallback(
     [createCollectionId, isInstructor, logEvent, resolveStudentIdentity, saveDocument],
   );
 
+  
+
   const getEnrollmentForStudent = useCallback(
     (studentUid: string, classId: string) => {
       const identity = resolveCachedStudentIdentity(studentUid);
@@ -1060,6 +1141,7 @@ const getWeeklyUsageForStudent = useCallback(
 
   const enrollStudentInClass = useCallback(
     async (studentUid: string, classId: string) => {
+      assertAccountClearForBookings(studentUid);
       const student = await resolveStudentIdentity(studentUid);
       const activePlan = getActivePlanForStudent(student.studentUid);
       const nextSessionForClass = sessions
@@ -1157,6 +1239,7 @@ const getWeeklyUsageForStudent = useCallback(
       resolveStudentIdentity,
       saveDocument,
       sessions,
+      assertAccountClearForBookings
     ],
   );
 
@@ -1243,63 +1326,7 @@ const getWeeklyUsageForStudent = useCallback(
       });
   }, [enrollments, invoices, payments, students, users]);
 
-  const getStudentAccountSnapshot = useCallback(
-    (studentUid: string): StudentAccountSnapshot => {
-      const identity = resolveCachedStudentIdentity(studentUid);
-      const activeEnrollments = enrollments.filter(
-        (item) => matchesStudentIdentity(item, identity) && item.status !== 'cancelled',
-      );
-      const ledger = resolvePaymentLedger(payments, invoices, enrollments, identity);
-      const outstanding = ledger.filter((item) => item.status !== 'paid');
-      const nextPayment = outstanding[0];
-      const openBalance = outstanding.reduce((sum, entry) => sum + entry.payment.amount, 0);
 
-      return { enrollments: activeEnrollments, ledger, outstanding, nextPayment, openBalance };
-    },
-    [enrollments, invoices, payments, resolveCachedStudentIdentity],
-  );
-
-  const analytics = useMemo<AnalyticsSnapshot>(() => {
-    const totalRevenue = payments
-      .filter((payment) => payment.status === 'paid')
-      .reduce((sum, payment) => sum + payment.amount, 0);
-    const pendingRevenue = payments
-      .filter((payment) => payment.status !== 'paid')
-      .reduce((sum, payment) => sum + payment.amount, 0);
-
-    const utilizationByClass = classes.reduce<AnalyticsSnapshot['utilizationByClass']>((acc, trainingClass) => {
-      const active = enrollments.filter(
-        (enrollment) => enrollment.classId === trainingClass.id && enrollment.status === 'active',
-      ).length;
-      const utilization = trainingClass.capacity ? active / trainingClass.capacity : 0;
-
-      acc[trainingClass.id] = {
-        capacity: trainingClass.capacity,
-        active,
-        utilization,
-      };
-      return acc;
-    }, {});
-
-    const averageUtilization =
-      classes.length > 0
-        ? Object.values(utilizationByClass).reduce((sum, entry) => sum + entry.utilization, 0) /
-          classes.length
-        : 0;
-
-    const presentCount = attendance.filter((item) => item.status === 'present').length;
-    const attendanceRate = attendance.length ? presentCount / attendance.length : 0;
-
-    const revenueByStudent = payments.reduce<Record<string, number>>((acc, payment) => {
-      const ownerKey = payment.studentUid;
-      if (payment.status === 'paid' && ownerKey) {
-        acc[ownerKey] = (acc[ownerKey] ?? 0) + payment.amount;
-      }
-      return acc;
-    }, {});
-
-    return { totalRevenue, pendingRevenue, averageUtilization, attendanceRate, revenueByStudent, utilizationByClass };
-  }, [attendance, classes, enrollments, payments]);
 
   const createClass = useCallback(
     async (payload: Omit<TrainingClass, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -1844,48 +1871,77 @@ const cancelEnrollment = useCallback(
     [createCollectionId, invoices, logEvent, paymentIntents, paymentSessions, payments],
   );
 
-  const payOutstandingPayment = useCallback(
-    async (paymentId: string) => {
-      const payment = payments.find((item) => item.id === paymentId);
-      if (!payment) {
-        throw new Error('Cobrança não encontrada.');
-      }
+const payOutstandingPayment = useCallback(
+  async (paymentId: string) => {
+    console.log('[payOutstandingPayment] ENTER', { paymentId, paymentsLen: payments.length });
+    const payment = payments.find((item) => item.id === paymentId);
+    if (!payment) throw new Error('Cobrança não encontrada.');
+    if (!payment.enrollmentId)
+      throw new Error('Não foi possível localizar a matrícula associada a esta cobrança.');
 
-      if (!payment.enrollmentId) {
-        throw new Error('Não foi possível localizar a matrícula associada a esta cobrança.');
-      }
+    const existingIntent = paymentIntents.find(
+      (item) => item.paymentId === paymentId && item.status !== 'succeeded',
+    );
 
-      const existingIntent = paymentIntents.find(
-        (item) => item.paymentId === paymentId && item.status !== 'succeeded',
+    const studentUid = payment.studentUid;
+
+    let intent: PaymentIntent =
+      existingIntent ??
+      {
+        id: createCollectionId('paymentIntents'),
+        studentUid,
+        paymentId,
+        enrollmentId: payment.enrollmentId,
+        amount: payment.amount,
+        currency: payment.currency,
+        paymentMethod: payment.method,
+        status: 'requires_payment_method',
+        clientSecret: `secret_${paymentId}`,
+      };
+
+    if (!existingIntent) {
+      await saveDocument('paymentIntents', intent);
+    }
+
+    // Call Functions → create Stripe Checkout session
+    const fn = httpsCallable(functions, 'payOutstandingPayment');
+    const res = await fn({ paymentId });
+    const data = res.data as any;
+
+    // ✅ DEBUG + GUARD (prevents _url crash)
+    console.log('[payOutstandingPayment] callable result:', JSON.stringify(data));
+
+    const sessionId = data?.sessionId;
+    const checkoutUrl = data?.checkoutUrl;
+
+    if (typeof checkoutUrl !== 'string' || checkoutUrl.length < 10) {
+      throw new Error(
+        `Stripe did not return checkoutUrl. sessionId=${String(sessionId)} data=${JSON.stringify(data)}`,
       );
+    }
 
-      const studentUid = payment.studentUid;
+    const safeSessionId = typeof sessionId === 'string' && sessionId ? sessionId : 'unknown';
 
-      let intent: PaymentIntent =
-        existingIntent ??
-        {
-          id: createCollectionId('paymentIntents'),
-          studentUid, // ✅ now defined and correct
-          paymentId,
-          enrollmentId: payment.enrollmentId,
-          amount: payment.amount,
-          currency: payment.currency,
-          paymentMethod: payment.method,
-          status: 'requires_payment_method',
-          clientSecret: `secret_${paymentId}`,
-        };
+    // Create a local PaymentSession object to satisfy your existing return type
+    const session: PaymentSession = {
+      id: safeSessionId,
+      paymentIntentId: intent.id,
+      paymentId,
+      studentUid,
+      status: 'requires_action',
+      provider: 'stripe_checkout',
+      checkoutUrl,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } as any;
 
-      if (!existingIntent) {
-        await saveDocument('paymentIntents', intent);
-      }
+    // Open Stripe Checkout
+    await Linking.openURL(checkoutUrl);
 
-      const session = await startPaymentSession(intent.id, intent);
-      await processPaymentWebhook(session.id, 'succeeded', undefined, session, intent);
-
-      return { session, intent };
-    },
-    [createCollectionId, paymentIntents, payments, processPaymentWebhook, saveDocument, startPaymentSession],
-  );
+    return { session, intent };
+  },
+  [payments, paymentIntents, createCollectionId, saveDocument],
+);
 
   const updateCardOnFile = useCallback((payload: Partial<CardOnFile>) => {
     setCardOnFile((prev) => ({ ...prev, ...payload }));

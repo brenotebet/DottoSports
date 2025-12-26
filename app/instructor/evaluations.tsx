@@ -275,7 +275,7 @@ export default function EvaluationsScreen() {
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top }]}
-      edges={['top', 'left', 'right', 'bottom']}>
+      edges={[ 'left', 'right', 'bottom']}>
       <TopBar title="Avaliações" />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={insets.top + 12}>
         <ScrollView

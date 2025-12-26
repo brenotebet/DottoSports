@@ -1,4 +1,4 @@
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,17 +15,16 @@ export const options = { headerShown: false };
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
   const { ensureStudentProfile, planOptions, getActivePlanForStudent, selectPlanForStudent } = useInstructorData();
 
   const [billingCycle, setBillingCycle] = useState<StudentPlan['billing']>('recurring');
 
-      useEffect(() => {
-        if (!user) return;
-
-        // ensure profile exists; identity is always auth.uid
-        void ensureStudentProfile(user.email, user.displayName);
-    }, [ensureStudentProfile, user]);
+  useEffect(() => {
+    if (!user) return;
+    void ensureStudentProfile(user.email, user.displayName);
+  }, [ensureStudentProfile, user]);
 
   const activePlan = useMemo(
     () => (user ? getActivePlanForStudent(user.uid) : undefined),
@@ -104,12 +103,19 @@ export default function AccountScreen() {
     if (!user) return;
 
     try {
+      const wasChange = Boolean(activePlan);
       await selectPlanForStudent(user.uid, planOptionId, billingCycle);
+
       Alert.alert(
-        activePlan ? 'Plano atualizado' : 'Plano salvo',
-        billingCycle === 'recurring'
-          ? 'Cobraremos mensalmente este plano com recorrência automática.'
-          : 'Plano pago à vista selecionado. Ajuste de cobrança registrado.',
+        wasChange ? 'Plano atualizado' : 'Plano confirmado',
+        'Para liberar suas inscrições e reservas, finalize o primeiro pagamento agora.',
+        [
+          { text: 'Agora não', style: 'cancel' },
+          {
+            text: 'Ir para pagamentos',
+            onPress: () => router.push('/payments'),
+          },
+        ],
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Não foi possível atualizar seu plano agora.';
@@ -163,7 +169,7 @@ export default function AccountScreen() {
           <View style={styles.dropdownGroup}>
             <View style={styles.dropdownField}>
               <ThemedText type="defaultSemiBold">Duração</ThemedText>
-              <ThemedText style={styles.muted}>Edite seu plano sem adicionar novas assinaturas.</ThemedText>
+              <ThemedText style={styles.muted}>Mostramos apenas opções disponíveis para esta duração.</ThemedText>
               <View style={styles.dropdownOptions}>
                 {durationOptions.map((option) => (
                   <Pressable
@@ -205,7 +211,7 @@ export default function AccountScreen() {
               <ThemedText type="subtitle">Valor a pagar</ThemedText>
               <ThemedText style={styles.muted}>
                 {billingCycle === 'recurring'
-                  ? 'Cobraremos este valor mensalmente enquanto o plano estiver ativo.'
+                  ? 'Cobrança mensal automática enquanto o plano estiver ativo.'
                   : 'Cobrança única antecipada para todo o período selecionado.'}
               </ThemedText>
             </View>
@@ -222,10 +228,10 @@ export default function AccountScreen() {
           </Pressable>
         </ThemedView>
 
-        <ThemedView style={styles.card}> 
+        <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Pagamentos e cobranças</ThemedText>
           <ThemedText style={styles.muted}>
-            Verifique boletos em aberto, faturas emitidas e recibos no painel dedicado de pagamentos.
+            Verifique cobranças em aberto, faturas emitidas e recibos no painel dedicado de pagamentos.
           </ThemedText>
           <Link href="/payments" asChild>
             <Pressable style={styles.secondaryButton}>

@@ -20,12 +20,11 @@ export default function InstructorDashboardScreen() {
 
   const pendingPersonalRequests = trainingRequests.filter((item) => item.status === 'pending');
 
-  const pendingPersonalRequests = trainingRequests.filter((item) => item.status === 'pending');
 
   return (
     <SafeAreaView
       style={[styles.safeArea, { paddingTop: insets.top + 12 }]}
-      edges={['top', 'left', 'right', 'bottom']}>
+      edges={[ 'left', 'right', 'bottom']}>
       <TopBar title="Painel do instrutor" />
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.heading}>
@@ -149,23 +148,6 @@ export default function InstructorDashboardScreen() {
           </Link>
         </ThemedView>
 
-        <ThemedView style={styles.card}>
-          <ThemedText type="subtitle">Pedidos de personal</ThemedText>
-          <ThemedText style={styles.muted}>
-            Veja solicitações de treinamento individual e marque quando já tiver contatado o cliente.
-          </ThemedText>
-          <View style={styles.requestRow}>
-            <ThemedText type="title">{pendingPersonalRequests.length}</ThemedText>
-            <ThemedText style={styles.muted}>pendente(s) para retorno</ThemedText>
-          </View>
-          <Link href="/instructor/training-requests" asChild>
-            <Pressable style={styles.linkButton}>
-              <ThemedText type="defaultSemiBold" style={styles.linkButtonText}>
-                Abrir pedidos
-              </ThemedText>
-            </Pressable>
-          </Link>
-        </ThemedView>
       </ScrollView>
     </SafeAreaView>
   );
@@ -268,11 +250,6 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: 'wrap',
     alignItems: 'flex-start',
-  },
-  requestRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 8,
   },
   requestRow: {
     flexDirection: 'row',

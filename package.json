@@ -19,6 +19,7 @@
     "dot-env": "^0.0.1",
     "expo": "~54.0.29",
     "expo-audio": "~1.1.0",
+    "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.10",
     "expo-file-system": "~19.0.20",
     "expo-font": "~14.0.9",

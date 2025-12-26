@@ -3,3 +3,6 @@ admin.initializeApp();
 
 export { promoteWaitlist } from './promoteWaitlist';
 
+export { payOutstandingPayment, stripeWebhook } from './paymentsStripe';
+
+

@@ -43,17 +43,24 @@ export default function PaymentsScreen() {
   );
 
   const handlePay = async (paymentId: string) => {
-    if (!user?.uid) return;
-    try {
-      const { session } = await payOutstandingPayment(paymentId);
-      Alert.alert(
-          'Pagamento registrado', 'Atualizamos seu saldo localmente (modo teste).'
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
-      Alert.alert('Falha no pagamento', message);
-    }
-  };
+  if (!user?.uid) return;
+
+  console.log('[PaymentsScreen] Pagar agora pressed', { paymentId });
+
+  try {
+    const result = await payOutstandingPayment(paymentId);
+    console.log('[PaymentsScreen] payOutstandingPayment returned:', result);
+
+    Alert.alert(
+      'Pagamento iniciado',
+      'Checkout aberto. O saldo só será liberado após confirmação do webhook.',
+    );
+  } catch (error) {
+    console.log('[PaymentsScreen] payOutstandingPayment error:', error);
+    const message = error instanceof Error ? error.message : 'Não foi possível processar o pagamento.';
+    Alert.alert('Falha no pagamento', message);
+  }
+};
 
   const nextDue = studentBalances[0]?.payment.dueDate;
 

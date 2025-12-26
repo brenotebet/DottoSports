@@ -29,6 +29,7 @@ export default function DashboardScreen() {
     goals,
     reloadFromStorage,
   } = useInstructorData();
+
   const [checkInStatus, setCheckInStatus] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -37,17 +38,13 @@ export default function DashboardScreen() {
     [getStudentAccountSnapshot, user?.uid],
   );
 
-  const studentEnrollments = useMemo(
-    () => studentAccount?.enrollments ?? [],
-    [studentAccount],
-  );
+  const studentEnrollments = useMemo(() => studentAccount?.enrollments ?? [], [studentAccount]);
 
   const bookingsForStudent = useMemo(() => {
     const uid = user?.uid;
     if (!uid) return [];
     return sessionBookings.filter((b) => b.studentUid === uid && b.status === 'booked');
   }, [sessionBookings, user?.uid]);
-
 
   const upcomingBookedSession = useMemo(() => {
     const now = Date.now();
@@ -102,8 +99,8 @@ export default function DashboardScreen() {
     const uid = user?.uid;
     const classId = upcomingSession?.classId;
     if (!uid || !classId) return null;
-      return getEnrollmentForStudent(uid, classId) ?? null;
-    }, [getEnrollmentForStudent, user?.uid, upcomingSession?.classId]);
+    return getEnrollmentForStudent(uid, classId) ?? null;
+  }, [getEnrollmentForStudent, user?.uid, upcomingSession?.classId]);
 
   const nextPayment = studentAccount?.nextPayment;
 
@@ -123,12 +120,11 @@ export default function DashboardScreen() {
   );
 
   const activeGoals = useMemo(
-    () =>
-      goals
-        .filter((goal) => goal.studentUid === user?.uid && goal.status === 'active')
-        .slice(0, 3),
+    () => goals.filter((goal) => goal.studentUid === user?.uid && goal.status === 'active').slice(0, 3),
     [goals, user?.uid],
   );
+
+  const planSelectedButUnpaid = Boolean(activePlanOption && (studentAccount?.openBalance ?? 0) > 0);
 
   const handleReload = useCallback(async () => {
     setRefreshing(true);
@@ -141,20 +137,9 @@ export default function DashboardScreen() {
 
   const highlights: { label: string; value: string; href?: Href }[] = [
     { label: 'Aulas inscritas', value: `${studentEnrollments.length} turmas`, href: '/classes/registered' },
-    {
-      label: 'Próxima cobrança',
-      value: nextPayment ? `Vence ${nextPayment.payment.dueDate}` : 'Nenhuma pendente',
-    },
-    {
-      label: 'Check-in rápido',
-      value:
-        upcomingSessionDescription ??
-        (studentEnrollments.length > 0
-          ? 'Sem aulas inscritas no momento'
-          : 'Precisa inscrever'),
-    },
     { label: 'Personal training', value: 'Solicitar 1:1', href: '/personal-training' },
   ];
+
   const hasEnrollments = studentEnrollments.length > 0;
   const canCheckIn = Boolean(enrollment && upcomingSession);
 
@@ -203,8 +188,31 @@ export default function DashboardScreen() {
           Bem-vindo(a) de volta!
         </ThemedText>
 
+        {/* ✅ If plan exists but unpaid, show prominent banner */}
+        {planSelectedButUnpaid ? (
+          <ThemedView style={styles.unpaidBanner}>
+            <View style={{ flex: 1 }}>
+              <ThemedText type="defaultSemiBold" style={styles.unpaidBannerTitle}>
+                Pagamento pendente
+              </ThemedText>
+              <ThemedText style={[styles.muted, styles.unpaidBannerText]}>
+                Você já escolheu um plano. Finalize o pagamento para liberar reservas e inscrições.
+              </ThemedText>
+            </View>
+            <Link href="/payments" asChild>
+              <Pressable style={styles.unpaidBannerButton}>
+                <ThemedText type="defaultSemiBold" style={styles.unpaidBannerButtonText}>
+                  Pagar agora
+                </ThemedText>
+              </Pressable>
+            </Link>
+          </ThemedView>
+        ) : null}
+
         <ThemedView style={styles.cardPrimary}>
-          <ThemedText type="subtitle" style={styles.cardPrimaryText}>Próxima aula</ThemedText>
+          <ThemedText type="subtitle" style={styles.cardPrimaryText}>
+            Próxima aula
+          </ThemedText>
           <ThemedText type="title" style={[styles.titleSpacing, styles.cardPrimaryText]}>
             {sessionClass?.title ?? 'Sem aulas próximas'}
           </ThemedText>
@@ -238,9 +246,7 @@ export default function DashboardScreen() {
               </Pressable>
             </Link>
             {canCheckIn ? (
-              <Pressable
-                style={[styles.checkInButton, { backgroundColor: '#022a4c' }]}
-                onPress={handleQuickCheckIn}>
+              <Pressable style={[styles.checkInButton, { backgroundColor: '#022a4c' }]} onPress={handleQuickCheckIn}>
                 <ThemedText type="defaultSemiBold" style={styles.checkInText}>
                   Check-in rápido
                 </ThemedText>
@@ -252,9 +258,7 @@ export default function DashboardScreen() {
               Nenhuma inscrição ativa. Veja o catálogo para escolher uma aula.
             </ThemedText>
           ) : null}
-          {checkInStatus ? (
-            <ThemedText style={[styles.cardPrimaryText, styles.muted]}>{checkInStatus}</ThemedText>
-          ) : null}
+          {checkInStatus ? <ThemedText style={[styles.cardPrimaryText, styles.muted]}>{checkInStatus}</ThemedText> : null}
         </ThemedView>
 
         <ThemedView style={styles.card}>
@@ -264,16 +268,38 @@ export default function DashboardScreen() {
               <ThemedText type="title" style={styles.titleSpacing}>
                 {activePlanOption.weeklyClasses}x na semana · {activePlanOption.durationMonths} meses
               </ThemedText>
-              <ThemedText style={styles.muted}>
-                {weeklyUsage ? `${weeklyUsage.remaining} aulas disponíveis nesta semana` : 'Calculando uso semanal...'}
-              </ThemedText>
-              <ThemedText style={styles.muted}>
-                {nextPayment ? `Próximo vencimento em ${nextPayment.payment.dueDate}` : 'Cobranças em dia.'}
-              </ThemedText>
+
+              {planSelectedButUnpaid ? (
+                <ThemedView style={styles.payGateBox}>
+                  <ThemedText type="defaultSemiBold">Finalize seu pagamento</ThemedText>
+                  <ThemedText style={styles.muted}>
+                    Assim que o pagamento for registrado, você poderá reservar horários e se inscrever em turmas.
+                  </ThemedText>
+                  <Link href="/payments" asChild>
+                    <Pressable style={styles.payNowButton}>
+                      <ThemedText type="defaultSemiBold" style={styles.payNowText}>
+                        Pagar agora
+                      </ThemedText>
+                    </Pressable>
+                  </Link>
+                </ThemedView>
+              ) : (
+                <>
+                  <ThemedText style={styles.muted}>
+                    {weeklyUsage ? `${weeklyUsage.remaining} aulas disponíveis nesta semana` : 'Calculando uso semanal...'}
+                  </ThemedText>
+                  <ThemedText style={styles.muted}>
+                    {nextPayment ? `Próximo vencimento em ${nextPayment.payment.dueDate}` : 'Cobranças em dia.'}
+                  </ThemedText>
+                </>
+              )}
+
               <View style={styles.planActions}>
                 <Link href="/account" asChild>
                   <Pressable style={styles.managePlanButton}>
-                    <ThemedText type="defaultSemiBold" style={styles.managePlanText}>Gerenciar plano</ThemedText>
+                    <ThemedText type="defaultSemiBold" style={styles.managePlanText}>
+                      Gerenciar plano
+                    </ThemedText>
                   </Pressable>
                 </Link>
               </View>
@@ -281,12 +307,13 @@ export default function DashboardScreen() {
           ) : (
             <>
               <ThemedText style={styles.muted}>
-                Você ainda não escolheu um plano. Selecione sua quantidade de aulas semanais para habilitar as
-                reservas.
+                Você ainda não escolheu um plano. Selecione sua quantidade de aulas semanais para habilitar as reservas.
               </ThemedText>
               <Link href="/account" asChild>
                 <Pressable style={styles.managePlanButton}>
-                  <ThemedText type="defaultSemiBold" style={styles.managePlanText}>Escolher plano</ThemedText>
+                  <ThemedText type="defaultSemiBold" style={styles.managePlanText}>
+                    Escolher plano
+                  </ThemedText>
                 </Pressable>
               </Link>
             </>
@@ -323,30 +350,34 @@ export default function DashboardScreen() {
             <ThemedText type="title" style={styles.titleSpacing}>
               {nextPayment ? `R$ ${nextPayment.payment.amount.toFixed(2)}` : 'Nenhum valor aberto'}
             </ThemedText>
-            <ThemedText>
-              {nextPayment ? `Vencimento ${nextPayment.payment.dueDate}` : 'Tudo em dia no momento.'}
-            </ThemedText>
+            <ThemedText>{nextPayment ? `Vencimento ${nextPayment.payment.dueDate}` : 'Tudo em dia no momento.'}</ThemedText>
+            {planSelectedButUnpaid ? (
+              <Link href="/payments" asChild>
+                <Pressable style={styles.smallCta}>
+                  <ThemedText type="defaultSemiBold" style={styles.smallCtaText}>
+                    Pagar agora
+                  </ThemedText>
+                </Pressable>
+              </Link>
+            ) : null}
           </ThemedView>
+
           <ThemedView style={[styles.card, styles.flexItem]}>
             <ThemedText type="subtitle">Cronômetro</ThemedText>
             <ThemedText style={styles.muted}>Intervalos e timer clássico</ThemedText>
             <Link href="/stopwatch" asChild>
               <Pressable style={styles.iconLink}>
-                <IconSymbol
-                  name="stopwatch.fill"
-                  color={Colors[colorScheme ?? 'light'].tint}
-                  size={28}
-                />
+                <IconSymbol name="stopwatch.fill" color={Colors[colorScheme ?? 'light'].tint} size={28} />
                 <ThemedText type="defaultSemiBold">Abrir</ThemedText>
               </Pressable>
             </Link>
           </ThemedView>
         </ThemedView>
 
-        <ThemedView style={styles.card}> 
+        <ThemedView style={styles.card}>
           <ThemedText type="subtitle">Resumo rápido</ThemedText>
           <View style={styles.highlightGrid}>
-            {highlights.map((item) => (
+            {highlights.map((item) =>
               item.href ? (
                 <Link key={item.label} href={item.href} asChild>
                   <Pressable style={[styles.highlightItem, styles.highlightInteractive]}>
@@ -359,8 +390,8 @@ export default function DashboardScreen() {
                   <ThemedText type="defaultSemiBold">{item.value}</ThemedText>
                   <ThemedText style={styles.muted}>{item.label}</ThemedText>
                 </ThemedView>
-              )
-            ))}
+              ),
+            )}
           </View>
         </ThemedView>
       </ScrollView>
@@ -413,6 +444,34 @@ const styles = StyleSheet.create({
   muted: {
     opacity: 0.82,
   },
+
+  // ✅ unpaid banner
+  unpaidBanner: {
+    borderRadius: 14,
+    padding: 14,
+    gap: 10,
+    backgroundColor: '#fff5e5',
+    borderWidth: 1,
+    borderColor: '#ffd9a6',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  unpaidBannerTitle: {
+    color: '#7a3d00',
+  },
+  unpaidBannerText: {
+    color: '#7a3d00',
+  },
+  unpaidBannerButton: {
+    backgroundColor: '#094f7d',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  unpaidBannerButtonText: {
+    color: '#fff',
+  },
+
   checkInButton: {
     backgroundColor: '#022a4c',
     paddingVertical: 12,
@@ -459,6 +518,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#c2d9ef',
   },
+
   goalsList: {
     gap: 10,
   },
@@ -484,6 +544,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: '#0e9aed',
   },
+
   planActions: {
     marginTop: 10,
   },
@@ -495,6 +556,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   managePlanText: {
+    color: '#fff',
+  },
+
+  // ✅ inline pay gate box in "Seu plano"
+  payGateBox: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dbe8f5',
+    gap: 8,
+  },
+  payNowButton: {
+    backgroundColor: '#094f7d',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  payNowText: {
+    color: '#fff',
+  },
+
+  smallCta: {
+    marginTop: 10,
+    backgroundColor: '#094f7d',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  smallCtaText: {
     color: '#fff',
   },
 });
